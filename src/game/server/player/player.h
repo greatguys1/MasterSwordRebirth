@@ -20,10 +20,14 @@
 #include "monsters/bodyparts/bodyparts_human.h"
 #include "pm_materials.h"
 #include "mscharacter.h"
+#include "iscript.h"
 
 #define MAX_ID_RANGE 2048
 #define SBAR_STRING_SIZE 128
-#define NUM_MAX_ITEMS 75 //Thothie APR2011_28
+#define NUM_MAX_ITEMS 100 //Thothie APR2011_28
+
+// was 1500, but there shouldn't be any issues with increasing.
+#define NUM_MAX_STACK 9999 //stack is stored as either a unsigned short, so that's the actual max it can be.
 
 enum sbar_data
 {
@@ -96,7 +100,7 @@ struct quickslot_t //Quickslots for items, spells
 	quickslottype_e Type;
 	uint ID;
 };
-#define MAX_QUICKSLOTS 24 //MiB MAR2012 - Increase quickslots
+#define MAX_QUICKSLOTS 36 //MiB MAR2012 - Increase quickslots
 
 #include "sharedmenu.h"
 
@@ -448,7 +452,7 @@ public:
 	float m_GaitFramerateGauge;				  //If I'm moving at this speed, play my gait at normal (100%) fps. Otherwide adjust fps using a ratio
 	quickslot_t m_QuickSlots[MAX_QUICKSLOTS]; //Quickslots for spells, items
 	float m_AnimSpeedAdj;
-	Vector mGlowColor;
+	Vector m_GlowColor;
 #ifndef VALVE_DLL
 	char mLastGlowColor[14];
 #endif
@@ -568,7 +572,7 @@ public:
 	//	void				UpdateFatigue( );
 	//	void				UpdateMana( );
 	//bool				SwapHands( bool bVerbose = true );
-	void ShowMenu(char *pszText, int bitsValidSlots, int nDisplayTime = 0, BOOL fNeedMore = FALSE);
+	void ShowMenu(const char *pszText, int bitsValidSlots, int nDisplayTime = 0, BOOL fNeedMore = FALSE);
 	int GiveGold(int iAmount, bool bVerbose = true);
 	//float				TraceAttack( entvars_t *pevInflictor, entvars_t *pevAttacker, float flDamage, Vector vecDir, TraceResult *ptr, int bitsDamageType, int iAccuracyRoll);
 	void AttackSound();
@@ -643,12 +647,11 @@ public:
 	charstate_e m_CharacterState; //Is the character loaded?
 	int m_CharacterNum;			  //Number of the currently loaded character
 	char m_NextMap[32], m_OldTransition[32], m_NextTransition[32];
-	char *m_SpawnTransition; //Transition to spawn at, after a level transition, or after death
+	const char *m_SpawnTransition; //Transition to spawn at, after a level transition, or after death
 
 	bool CreateStats();
 	void DeleteStats();
 
-	int IdealModel();
 	Vector Size(int flags = 0);
 	void SetSize(int flags = 0);
 	float Volume();
@@ -876,6 +879,6 @@ extern int playerBodyArray[16];
 extern int gmsgHudText;
 extern BOOL gInitHUD;
 
-char *GetOtherPlayerTransition(CBasePlayer *pPlayer);
+const char *GetOtherPlayerTransition(CBasePlayer *pPlayer);
 
 #endif // PLAYER_H

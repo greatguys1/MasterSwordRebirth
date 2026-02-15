@@ -7,6 +7,7 @@
 #include "script.h"
 #include "scriptmgr.h"
 #include "groupfile.h"
+#include "mslogger.h"
 
 #ifdef VALVE_DLL
 #include "svglobals.h"
@@ -26,7 +27,6 @@ bool GetModelBounds(CBaseEntity* pEntity, Vector Bounds[2]);
 #endif
 
 #include "../engine/studio.h"
-#include "logger.h"
 #include "time.h"
 #include "crc/crchash.h" //Wishbone MAR2016 - Our CRC function.
 #include "findentities.h"
@@ -343,7 +343,7 @@ const char* CScript::GetConst(const char* Text)
 			return ReturnString;
 		}
 		else
-			MSErrorConsoleText(__FUNCTION__, UTIL_VarArgs("Script: %s, \"%s\" - Mismatched Parenthesis!\n", m.ScriptFile.c_str(), Text));
+			MS_ERROR("%s: Script: %s, \"%s\" - Mismatched Parenthesis!", m.ScriptFile.c_str(), Text);
 	}
 	else
 		for (int i = 0; i < m_Constants.size(); i++)
@@ -506,7 +506,7 @@ msstring CScript::ScriptGetter_AlphaNum(msstring& FullName, msstring& ParserName
 		msstring num_conv = Params[0];
 		msstring out_str;
 		int in_length = num_conv.len();
-		char* cc;
+		const char* cc;
 		bool char_legit;
 		msstring extra_list;
 		bool check_extras = false;
@@ -551,12 +551,12 @@ msstring CScript::ScriptGetter_AngleDiff(msstring& FullName, msstring& ParserNam
 }
 
 //$angles(<start_origin>,<end_origin>)
-//� returns the 2d angle between two vectors
+//(c) returns the 2d angle between two vectors
 //- priority: very high, scope: shared
 msstring CScript::ScriptGetter_Angles(msstring& FullName, msstring& ParserName, msstringlist& Params)
 {
 	//Thothie MAR 2008a
-	//- $angles(<start_origin>,<end_origin>) � returns the 2d angle between two vectors
+	//- $angles(<start_origin>,<end_origin>) (c) returns the 2d angle between two vectors
 	//- worried atan2 maybe CPU intensive. :/
 	//priority: very high, scope: shared
 	msstring Return;
@@ -720,8 +720,8 @@ msstring CScript::ScriptGetter_CapFirst(msstring& FullName, msstring& ParserName
 	{
 		msstring sen = Params[0];
 		msstring f = sen;
-		f = strupr(f);
-		sen.c_str()[0] = f.c_str()[0];
+		f = _strupr(f);
+		sen.str()[0] = f.str()[0];
 		return sen;
 	}
 	else
@@ -1288,7 +1288,7 @@ msstring CScript::ScriptGetter_GetArray(msstring& FullName, msstring& ParserName
 				if (Params.size() > vParam)
 				{
 					msstring                vsSrch = Params[vParam++];
-					msstring                vsSrchType = Params.size() > vParam ? Params[vParam++] : "equals";
+					msstring                vsSrchType = Params.size() > vParam ? msstring(Params[vParam++]) : msstring("equals");
 
 					int                     vSrchType;
 					if (vsSrchType == "startswith")       vSrchType = 0;
@@ -1305,12 +1305,12 @@ msstring CScript::ScriptGetter_GetArray(msstring& FullName, msstring& ParserName
 					bool                    bCaseInsensitive = Params.size() > vParam ? atoi(Params[vParam++]) == 1 : false;
 
 					vStrtIndx = V_max(vStrtIndx, 0);
-					if (bCaseInsensitive) vsSrch = strlwr(vsSrch);
+					if (bCaseInsensitive) vsSrch = _strlwr(vsSrch);
 					for (size_t i = vStrtIndx; i < pArray->size(); ++i)
 					{
 						bool                bFnd = false;
 						msstring            vsCur = (*pArray)[i];
-						if (bCaseInsensitive) vsCur = strlwr(vsCur);
+						if (bCaseInsensitive) vsCur = _strlwr(vsCur);
 
 						switch (vSrchType)
 						{
@@ -1364,7 +1364,7 @@ msstring CScript::ScriptGetter_GetAttackProp(msstring& FullName, msstring& Parse
 		//Thothie OCT2016_22 sanity check
 		if (!pItem)
 		{
-			MSErrorConsoleText("$get_attackprop", UTIL_VarArgs(" used on non-item! %s\n", m.ScriptFile.c_str()));
+			MS_ERROR("$get_attackprop used on non-item! %s", m.ScriptFile.c_str());
 			return "0";
 		}
 
@@ -1439,7 +1439,7 @@ msstring CScript::ScriptGetter_GetByName(msstring& FullName, msstring& ParserNam
 	msstring Return;
 	if (Params.size() >= 1)
 	{
-		CBaseEntity* pEntity = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + Params[0]);
+		CBaseEntity* pEntity = UTIL_FindEntityByString(NULL, "netname", msstring("-") + Params[0]);
 		if (pEntity)
 			return EntToString(pEntity);
 		else
@@ -1678,7 +1678,7 @@ msstring CScript::ScriptGetter_GetCVar(msstring& FullName, msstring& ParserName,
 //- priority: very low, scope: server
 msstring CScript::ScriptGetter_GetFileLine(msstring& FullName, msstring& ParserName, msstringlist& Params)
 {
-	//MiB Feb2008a � �Read� a line from a file
+	//MiB Feb2008a (c) (c)Read(c) a line from a file
 	//- $get_fileline(<file>,[line])
 	//priority: very low, scope: server
 //#ifdef VALVE_DLL //Thothie MAR2019_02 - MiB says removing this will allow client file access
@@ -2377,7 +2377,7 @@ msstring CScript::ScriptGetter_GetScriptFlag(msstring& FullName, msstring& Parse
 		sf_add_values = true;
 		sf_array_values = true;
 		msstring arrayext = Params[1];
-		sf_array_name += _strupr(arrayext.c_str());
+		sf_array_name += _strupr(arrayext.str());
 	}
 	else if (Params[2] == "type_exists")
 	{
@@ -2490,7 +2490,7 @@ msstring CScript::ScriptGetter_GetScriptFlag(msstring& FullName, msstring& Parse
 	}
 	else
 	{
-		MSErrorConsoleText("scriptflags", UTIL_VarArgs("$get_scriptflags target entity not found in %s\n", m.ScriptFile.c_str()));
+		MS_ERROR("scriptflags $get_scriptflags target entity not found in %s", m.ScriptFile.c_str());
 	}
 #endif
 
@@ -3295,7 +3295,7 @@ msstring CScript::ScriptGetter_MathReturn(msstring& FullName, msstring& ParserNa
 				RETURN_FLOAT(sin(atof(Params[1])));
 			}
 		}
-		MSErrorConsoleText("ExecuteScriptCmd", UTIL_VarArgs("Script: %s, %s - not enough parameters!\n", m.ScriptFile.c_str(), ParserName.c_str()));
+		MS_ERROR("ExecuteScriptCmd Script: %s, %s - not enough parameters!", m.ScriptFile.c_str(), ParserName.c_str());
 		return "0";
 	}
 
@@ -3394,13 +3394,13 @@ msstring CScript::ScriptGetter_MathReturn(msstring& FullName, msstring& ParserNa
 		else
 		{
 			end_result = 0;
-			MSErrorConsoleText("ExecuteScriptCmd", UTIL_VarArgs("Script: %s, %s - not enough parameters for $math capvar!\n", m.ScriptFile.c_str(), ParserName.c_str()));
+			MS_ERROR("ExecuteScriptCmd Script: %s, %s - not enough parameters for $math capvar!", m.ScriptFile.c_str(), ParserName.c_str());
 		}
 	}
 
 	if (!legit_command)
 	{
-		MSErrorConsoleText("ExecuteScriptCmd", UTIL_VarArgs("Script: %s, %s - %s is an invalid operation!\n", m.ScriptFile.c_str(), ParserName.c_str(), op_type.c_str()));
+		MS_ERROR("ExecuteScriptCmd Script: %s, %s - %s is an invalid operation!", m.ScriptFile.c_str(), ParserName.c_str(), op_type.c_str());
 		return "0";
 	}
 
@@ -3487,7 +3487,7 @@ msstring CScript::ScriptGetter_Num(msstring& FullName, msstring& ParserName, mss
 		msstring num_conv = Params[0];
 		msstring out_str;
 		int in_length = num_conv.len();
-		char* cc;
+		const char* cc;
 		bool char_legit;
 		msstring extra_list;
 		bool check_extras = false;
@@ -4923,7 +4923,7 @@ bool CScript::Spawn(msstring Filename, CBaseEntity* pScriptedEnt, IScripted* pSc
 #else
 #ifndef RELEASE_LOCKDOWN
 #ifdef VALVE_DLL
-			logfile << "ERROR: Script not found: " << ScriptName.c_str() << "\n";
+			MS_ERROR("ERROR: Script not found: %s", ScriptName.c_str());
 			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Script Not Found", msstring("Script not found: ") + ScriptName, NULL);
 #endif
 #else
@@ -4960,8 +4960,6 @@ bool CScript::Spawn(msstring Filename, CBaseEntity* pScriptedEnt, IScripted* pSc
 
 void CScript::RunScriptEvents(bool fOnlyRunNamedEvents)
 {
-	startdbg;
-	dbg("Proc_Events");
 	//Run script events
 	//~ Runs unnamed events or named events that were specified with calleventtimed ~
 	int events = m.Events.size();
@@ -4972,7 +4970,6 @@ void CScript::RunScriptEvents(bool fOnlyRunNamedEvents)
 		msstring msEventName = (m.ScriptFile.c_str());
 		msEventName.append("->");
 		msEventName.append(Event.Name);
-		dbg(msEventName);
 		if (!Event.Name && fOnlyRunNamedEvents)
 			continue;
 
@@ -5000,8 +4997,6 @@ void CScript::RunScriptEvents(bool fOnlyRunNamedEvents)
 			Script_ExecuteEvent(Event);
 		}
 	}
-
-	enddbg;
 }
 void CScript::RunScriptEventByName(const char* pszEventName, msstringlist* Parameters)
 {
@@ -5081,9 +5076,6 @@ void CScript::CallLogged(const char* title, std::clock_t start)
 
 bool CScript::ParseScriptFile(const char* pszScriptData)
 {
-	startdbg;
-
-	dbg("Begin");
 	if (!m.ScriptFile.len() || !pszScriptData)
 		return false;
 
@@ -5139,7 +5131,6 @@ bool CScript::ParseScriptFile(const char* pszScriptData)
 		lineNum++;
 	}
 
-	enddbg("CSript::ParseScriptFile()");
 	//  Uncomment to print out all this function gathered from the script file
 	//#ifndef VALVE_DLL
 		/*SCRIPT_EVENT *pEvent = seFirstEvent;
@@ -5802,13 +5793,12 @@ bool CScript::ParseScriptFile(const char* pszScriptData)
 // 	return 1;
 // }
 
-int CScript::ParseLine(const char* pszCommandLine /*in*/, int LineNum /*in*/, SCRIPT_EVENT** pCurrentEvent /*in/out*/,
-	scriptcmd_list** pCurrentCmds /*in/out*/, ::mslist<scriptcmd_list*>& ParentCmds /*in/out*/)
+int CScript::ParseLine(const char* pszCommandLine /*in*/, 
+	int LineNum /*in*/, 
+	SCRIPT_EVENT** pCurrentEvent /*in/out*/,
+	scriptcmd_list** pCurrentCmds /*in/out*/, 
+	::mslist<scriptcmd_list*>& ParentCmds /*in/out*/)
 {
-	startdbg;
-
-	dbg("Begin");
-
 	SCRIPT_EVENT* CurrentEvent = *pCurrentEvent;
 	scriptcmd_list& CurrentCmds = **pCurrentCmds;
 
@@ -5819,7 +5809,6 @@ int CScript::ParseLine(const char* pszCommandLine /*in*/, int LineNum /*in*/, SC
 #define CmdLine &pszCommandLine[LineOfs]
 #define CmdLineTmp &pszCommandLine[TmpLineOfs]
 
-	dbg(pszCommandLine);
 
 	//Read the first word of the line
 	if (sscanf(pszCommandLine, "%s", TestCommand) <= 0)
@@ -5891,7 +5880,7 @@ int CScript::ParseLine(const char* pszCommandLine /*in*/, int LineNum /*in*/, SC
 		{
 			if (!ParentCmds.size())
 			{
-				MSErrorConsoleText(__FUNCTION__, UTIL_VarArgs("Script: %s, Line: %i - %s \"{\" following non conditional command!\n", m.ScriptFile.c_str(), LineNum, TestCommand, cBuffer));
+				MS_ERROR("%s: Script: %s, Line: %i - %s \"{\" following non conditional command!", __FUNCTION__, m.ScriptFile.c_str(), LineNum, TestCommand, cBuffer);
 				return 0;
 			}
 
@@ -6041,7 +6030,7 @@ int CScript::ParseLine(const char* pszCommandLine /*in*/, int LineNum /*in*/, SC
 				}
 			}
 			else
-				MSErrorConsoleText("SCript::ParseLine()", msstring("Script: ") + (const char*)m.ScriptFile.c_str() + " Line: " + LineNum + " - if() statement missing ')'!\n");
+				MS_ERROR("Script::ParseLine() Script: %s Line: %i - if() statement missing ')'!", (const char*)m.ScriptFile.c_str(), LineNum);
 		}
 	}
 	else if (!_stricmp(TestCommand, "else"))
@@ -6065,7 +6054,8 @@ int CScript::ParseLine(const char* pszCommandLine /*in*/, int LineNum /*in*/, SC
 			else
 				return 2; //Return 2 so any parent command knows I'm not done yet
 		}
-		else MSErrorConsoleText("CSript::ParseLine", UTIL_VarArgs("Script: %s, Line: %i - %s \"else\" following non conditional command!\n", m.ScriptFile.c_str(), LineNum, TestCommand, cBuffer));
+		else 
+			MS_ERROR("CSript::ParseLine Script: %s, Line: %i - %s \"else\" following non conditional command!", m.ScriptFile.c_str(), LineNum, TestCommand, cBuffer);
 	}
 	else if (!_stricmp(TestCommand, "eventname"))
 	{
@@ -6229,7 +6219,7 @@ int CScript::ParseLine(const char* pszCommandLine /*in*/, int LineNum /*in*/, SC
 		enum { pctype_model, pctype_sound, pctype_sprite } Precachetype;
 
 		int ResourceIdx = 0;
-		char* pSearchLine = "%s";
+		const char* pSearchLine = "%s";
 		cBuffer[0] = 0;
 		int SndType = 0;
 		if (!_stricmp(TestCommand, "sound.play3d") || !_stricmp(TestCommand, "svsound.play3d")) SndType = 1;	//Sound name is first parameter
@@ -6311,7 +6301,7 @@ int CScript::ParseLine(const char* pszCommandLine /*in*/, int LineNum /*in*/, SC
 			static msstring Precaches[16384] = { "" };
 			static int PrecachesTotal = 0;
 
-			char* pszGlobalPointer = nullptr; //Precaches MUST be global pointers. Can't use stack memory
+			const char* pszGlobalPointer = nullptr; //Precaches MUST be global pointers. Can't use stack memory
 			for (int p = 0; p < PrecachesTotal; p++)
 				if (Fullpath == Precaches[p])
 				{
@@ -6320,7 +6310,7 @@ int CScript::ParseLine(const char* pszCommandLine /*in*/, int LineNum /*in*/, SC
 				}
 			if (!pszGlobalPointer)
 			{
-				pszGlobalPointer = (Precaches[PrecachesTotal++] = Fullpath).c_str();
+				pszGlobalPointer = (Precaches[PrecachesTotal++] = Fullpath);
 			}
 
 			//if( Fullpath.contains( "human" ) )
@@ -6400,7 +6390,7 @@ int CScript::ParseLine(const char* pszCommandLine /*in*/, int LineNum /*in*/, SC
 					LineOfs++;					//Skip the closing quote
 				}
 				else	//Error: No closing quotes
-					MSErrorConsoleText("", UTIL_VarArgs("Script: %s, Line: %i - \"%s\" Closing quotations NOT FOUND!\n", m.ScriptFile.c_str(), LineNum, cBuffer));
+					MS_ERROR("Script: %s, Line: %i - \"%s\" Closing quotations NOT FOUND!", m.ScriptFile.c_str(), LineNum, cBuffer);
 			}
 
 			ScriptCmd.m_Params.add(GetConst(cBuffer));	//Resolve constants, but not variables
@@ -6422,10 +6412,9 @@ DontKeepCommand:
 			*pCurrentCmds = ParentCmds[ParentCmds.size() - 1];
 			ParentCmds.erase(ParentCmds.size() - 1);
 		}
-		else MSErrorConsoleText("", UTIL_VarArgs("Script: %s, Line: %i - Conditional command returned to parent cmd list but the parent list wasn't found!\n", m.ScriptFile.c_str(), LineNum, cBuffer));
+		else 
+			MS_ERROR("Script: %s, Line: %i - Conditional command returned to parent cmd list but the parent list wasn't found!", m.ScriptFile.c_str(), LineNum, cBuffer);
 	}
-
-	enddbg("CScript::ParseLine()");
 
 	return 1;
 }
@@ -6466,7 +6455,7 @@ bool CScript::Script_SetupEvent(SCRIPT_EVENT& Event, msstringlist* Parameters)
 
 	return m.pScriptedInterface ? m.pScriptedInterface->Script_SetupEvent(this, Event) : true;
 }
-void CScript::ErrorPrintCommand(const char* vsUniqueTag, SCRIPT_EVENT* pEvent, msstring& vsCmdName, msstringlist& vParams, int vParamStrt, char* vsText)
+void CScript::ErrorPrintCommand(const char* vsUniqueTag, SCRIPT_EVENT* pEvent, msstring& vsCmdName, msstringlist& vParams, int vParamStrt, const char* vsText)
 {
 #if !TURN_OFF_ALERT
 	msstring                            vsParams;
@@ -6690,6 +6679,13 @@ void IScripted::CallScriptEvent(const char* EventName, msstringlist* Parameters)
 	m_ReturnData = "";
 	for (int i = 0; i < m_Scripts.size(); i++)
 		m_Scripts[i]->RunScriptEventByName(EventName, Parameters);
+	
+	// Also try calling registered AngelScript global function handlers
+	// This allows modules to register event handlers using RegisterEngineEvent()
+	#ifdef VALVE_DLL // Server-side only
+	extern void CallAngelScriptEventHandler(const char* eventName, msstringlist* params);
+	CallAngelScriptEventHandler(EventName, Parameters);
+	#endif
 }
 
 void IScripted::Script_InitHUD(CBasePlayer* pPlayer)
@@ -6961,38 +6957,10 @@ void CScript::conflict_check(msstring testvar, msstring testvar_type, msstring t
 
 	if (cc_found)
 	{
-		msstring out_error;
 		if (linenum == 0)
-			out_error = UTIL_VarArgs("CONFLICT_ERROR! [%s:%s]:(%s) %s %s\n", testvar_scope.c_str(), m.ScriptFile.c_str(), cc_conflict_rep.c_str(), testvar_type.c_str(), testvar.c_str());
+			MS_ERROR("MSSCRIPT: CONFLICT ERROR [%s:%s]:(%s) %s %s", testvar_scope.c_str(), m.ScriptFile.c_str(), cc_conflict_rep.c_str(), testvar_type.c_str(), testvar.c_str());
 		else
-			out_error = UTIL_VarArgs("CONFLICT_ERROR! [%s:%s]:(%s) %s %s at %d\n", testvar_scope.c_str(), m.ScriptFile.c_str(), cc_conflict_rep.c_str(), testvar_type.c_str(), testvar.c_str(), linenum);
-
-		logfile << Logger::LOG_WARN << out_error.c_str();
-		//be nice to be able to return the top script here, but buggers up if I try to pull the ent to do so
-		Print("%s", out_error.c_str());
-		MSErrorConsoleText("", out_error.c_str());
-		/*
-		if ( m.pScriptedEnt )
-		{
-			CBaseEntity *pEntity = m.pScriptedEnt;
-			IScripted *pScripted = (pEntity) ? pEntity->GetScripted() : NULL;
-			if ( pScripted )
-			{
-				cc_error_text.append( UTIL_VarArgs( "[%s]", pScripted->m_Scripts[0]->m.ScriptFile.c_str() ) );
-			}
-			else
-			{
-				cc_error_text.append( UTIL_VarArgs( "[*%s]", m.ScriptFile.c_str() ) );
-			}
-		}
-		else
-		{
-			cc_error_text.append( UTIL_VarArgs( "[*%s]", m.ScriptFile.c_str() ) );
-		}
-		logfile << "Conflict_error*: " << cc_error_text.c_str() << " : " << VarName.c_str() << "\n";
-		//Print("Conflict_error: %s with %s in %s:\n",cc_error_text.c_str(),VarName.c_str(), m.ScriptFile.c_str() );
-		//MSErrorConsoleText( "", UTIL_VarArgs("Conflict_error: %s with %s in %s:\n",cc_error_text.c_str(),VarName.c_str(), m.ScriptFile.c_str()) );
-		*/
+			MS_ERROR("MSSCRIPT: CONFLICT ERROR [%s:%s]:(%s) %s %s at %d", testvar_scope.c_str(), m.ScriptFile.c_str(), cc_conflict_rep.c_str(), testvar_type.c_str(), testvar.c_str(), linenum);
 	}
 }
 #endif

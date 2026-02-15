@@ -9,6 +9,15 @@ void MSGameThink();
 void MSGameEnd();
 void SendHUDMsgAll(const char* Title, const char* Text);
 
+// Server state flag - 0 during level changes, 1 when server is fully active
+extern int g_serveractive;
+
+// Forward declarations
+class CBaseEntity;
+
+// Global game_master entity handle
+extern CBaseEntity* g_pGameMasterEntity;
+
 #define SCRIPT_TYPES 4
 
 class CSVGlobals
@@ -45,6 +54,14 @@ extern cvar_t *g_airaccelerate;
 extern cvar_t *g_friction;
 extern cvar_t *g_stopspeed;
 extern cvar_t *g_waterfriction;
+
+//AngelScript CVARs
+extern cvar_t as_enabled;
+extern cvar_t as_memory_limit;
+extern cvar_t as_memory_debug;
+extern cvar_t as_gc_interval;
+extern cvar_t as_stack_size;
+extern cvar_t as_debug_mode;
 
 #ifdef DEV_BUILD
 extern cvar_s ms_allowdev;

@@ -3,8 +3,9 @@
 #include "svglobals.h"
 #include "global.h"
 #include "mscharacter.h"
-#include "logger.h"
 #include "filesystem_shared.h"
+#include "mslogger.h"
+#include "ms/angelscript/CAngelScriptManager.h" // For AngelScript map transitions
 
 class CCycler : public CBaseMonster
 {
@@ -306,7 +307,7 @@ public:
 			return;
 		}
 		PRECACHE_MODEL(pszModel);
-		SET_MODEL(edict(), pszModel);
+		SET_MODEL(ENT(pev), pszModel);
 		//Set solidity
 		if (pev->dmg)
 		{
@@ -319,6 +320,14 @@ public:
 		pev->controller[1] = 255 / 2;
 		pev->controller[2] = 255 / 2;
 		pev->controller[3] = 255 / 2;
+
+		// Strip Edicts with no targetname
+		/*if (FStringNull(this->pev->targetname))
+		{
+			this->pev->flags |= FL_CLIENTONLY;
+			SET_MODEL(ENT(this->pev), iStringNull);
+			UTIL_Remove(this);
+		}*/
 	}
 };
 LINK_ENTITY_TO_CLASS(env_model, CStaticModel);
@@ -370,9 +379,9 @@ void CTargetMP3Audio::Use(CBaseEntity *pActivator, CBaseEntity *pCaller,
 	//Thothie AUG2007a - removing music/ dependancy, so you can play MP3's in valve/media/ folder
 	msstring th_test_string = STRING(pev->message);
 	if (th_test_string.contains("/"))
-		 _snprintf(command, sizeof(command),  "mp3 %s %s\n",  FBitSet(pev->spawnflags,  SF_LOOP) ? "loop" : "play",  STRING(pev->message) );
+		_snprintf(command, sizeof(command),  "mp3 %s %s\n",  FBitSet(pev->spawnflags,  SF_LOOP) ? "loop" : "play",  STRING(pev->message) );
 	else
-		 _snprintf(command, sizeof(command),  "mp3 %s music/%s\n",  FBitSet(pev->spawnflags,  SF_LOOP) ? "loop" : "play",  STRING(pev->message) );
+		_snprintf(command, sizeof(command),  "mp3 %s music/%s\n",  FBitSet(pev->spawnflags,  SF_LOOP) ? "loop" : "play",  STRING(pev->message) );
 
 	CLIENT_COMMAND(pActivator->edict(), command); //thothie - not sure how this works, might be useful to know
 
@@ -406,7 +415,7 @@ public:
 			Params.add(ms_npcname.c_str());
 			Params.add(MessageGet());
 
-			CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+			CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 			IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 			if (pGMScript)
 				pGMScript->CallScriptEvent("gm_ms_text", &Params);
@@ -462,7 +471,7 @@ public:
 		TokenizeString(m_WeatherOptions, Parameters);
 
 		//Thothie DEC2010_27 - lock weather via game master
-		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 		IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 		if (pGMScript)
 			pGMScript->CallScriptEvent("game_set_weather", &Parameters);
@@ -905,7 +914,7 @@ public:
 		msstring sTemp = STRING(pev->targetname);
 		if (sTemp.starts_with("crit")) return false;
 
-		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 		IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 		if (pGMScript)
 		{
@@ -934,12 +943,13 @@ public:
 			int idx = RANDOM_LONG(0, float(pMonsterData->m_nRndMobs) - 1);
 			for (int i = 0; i < pMonsterData->m_nRndMobs; i++)
 			{
-				logfile << UTIL_VarArgs("DEBUG: respawn randommob list #%i / %i as %s\n", i, pMonsterData->m_nRndMobs, pMonsterData->random_monsterdata[i].m_ScriptName ? pMonsterData->random_monsterdata[i].m_ScriptName.c_str() : "???");
+				MS_DEBUG("DEBUG: respawn randommob list #%i / %i as %s", pMonsterData->m_nRndMobs, pMonsterData->random_monsterdata[i].m_ScriptName.c_str() ? pMonsterData->random_monsterdata[i].m_ScriptName.c_str() : "???");
 			}
-			//logfile << UTIL_VarArgs("DEBUG: respawn randommob chose: #i %s\n",idx,pMonsterData->random_monsterdata[idx].m_ScriptName?pMonsterData->random_monsterdata[idx].m_ScriptName:"???");
-			logfile << UTIL_VarArgs("DEBUG: respawn chose randommob #%i %s\n", idx);
+
+			MS_DEBUG("DEBUG: respawn chose randommob #%i %s", idx, pMonsterData->random_monsterdata[idx].m_ScriptName.c_str() ? pMonsterData->random_monsterdata[idx].m_ScriptName.c_str() : "???");
 			//I DIE HERE:
-			logfile << UTIL_VarArgs("DEBUG: specifically: %s\n", pMonsterData->random_monsterdata[idx].m_ScriptName.c_str());
+
+			MS_DEBUG("DEBUG: specifically: %s", pMonsterData->random_monsterdata[idx].m_ScriptName.c_str());
 			pMonsterData->scriptfile = ALLOC_STRING(pMonsterData->random_monsterdata[idx].m_ScriptName);
 			pMonsterData->title = ALLOC_STRING(pMonsterData->random_monsterdata[idx].m_title);
 
@@ -1011,10 +1021,10 @@ public:
 				// logfile << UTIL_VarArgs("DEBUG: spawn adding randommob #%i / %i as %s\n", i, pMonster->m_nRndMobs, pMonster->random_monsterdata[i].m_ScriptName ? pMonster->random_monsterdata[i].m_ScriptName.c_str() : "???");
 				mdSpawnMonster[iMonstersToSpawn].random_monsterdata.add(pMonster->random_monsterdata[i]); //read em in
 			}
-			//logfile << UTIL_VarArgs("DEBUG: spawn chose randommob #%i = %s\n",idx,pMonster->random_monsterdata[idx].m_ScriptName ? pMonster->random_monsterdata[idx].m_ScriptName : "???");
-			logfile << UTIL_VarArgs("DEBUG: spawn chose randommob #%i\n", idx);
+			MS_DEBUG("DEBUG: spawn chose randommob #%i %s", idx, pMonster->random_monsterdata[idx].m_ScriptName ? pMonster->random_monsterdata[idx].m_ScriptName.c_str() : "???");
+
 			//I DIE HERE:
-			logfile << UTIL_VarArgs("DEBUG: specifically %s\n", pMonster->random_monsterdata[idx].m_ScriptName.c_str());
+			MS_DEBUG("DEBUG: specifically %s", pMonster->random_monsterdata[idx].m_ScriptName.c_str());
 			mdSpawnMonster[iMonstersToSpawn].scriptfile = ALLOC_STRING(pMonster->random_monsterdata[idx].m_ScriptName);
 			mdSpawnMonster[iMonstersToSpawn].title = ALLOC_STRING(pMonster->random_monsterdata[idx].m_title);
 
@@ -1447,7 +1457,7 @@ public:
 			}
 		}
 
-		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 		IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 		if (pGMScript && (strcmp(pGMScript->GetFirstScriptVar("GM_DISABLE_TRANSITIONS"), "1") == 0))
 			return;
@@ -1664,7 +1674,7 @@ public:
 			}
 		}
 
-		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 		IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 		if (pGMScript && (strcmp(pGMScript->GetFirstScriptVar("GM_DISABLE_TRANSITIONS"), "1") == 0))
 			return FALSE;
@@ -1712,12 +1722,23 @@ public:
 		//Thothie JUN2007 - tired of this not displaying, letting scripts handle it
 		//msstring Text = msstring("It appears that you wish to travel to ") + STRING(sDestName) + ".\nPress enter (accept), to continue.";
 		//pOtherPlayer->SendHUDMsg( "Travel", Text );
-		msstringlist Parameters;
-		Parameters.add(STRING(sDestName));
-		Parameters.add(STRING(sDestMap));
-		Parameters.add(STRING(sName));
-		Parameters.add(STRING(sDestTrans));
-		pPlayer->CallScriptEvent("game_transition_entered", &Parameters);
+		// Call AngelScript player function for transition entered
+		#ifdef VALVE_DLL
+		CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
+		if (pASManager && pASManager->IsInitialized())
+		{
+			std::vector<std::string> params;
+			params.push_back(pPlayer->DisplayName());     // Player name
+			params.push_back(STRING(sDestName));          // Destination name
+			params.push_back(STRING(sDestMap));           // Destination map
+			params.push_back(STRING(sName));              // Local spawn point
+			params.push_back(STRING(sDestTrans));         // Destination spawn point
+			params.push_back(GETPLAYERAUTHID(pPlayer->edict())); // Steam ID
+			
+			// Call global AngelScript function
+			pASManager->CallGlobalFunctionWithParams("OnPlayerTransitionEntered", params);
+		}
+		#endif
 
 		MESSAGE_BEGIN(MSG_ONE, g_netmsg[NETMSG_CLDLLFUNC], NULL, pPlayer->pev);
 		WRITE_BYTE(3);
@@ -1755,7 +1776,7 @@ public:
 		if (!pPlayer || pPlayer->CurrentTransArea != this)
 			return;
 
-		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 		IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 		if (pGMScript && (strcmp(pGMScript->GetFirstScriptVar("GM_DISABLE_TRANSITIONS"), "1") == 0))
 			return;
@@ -1768,11 +1789,22 @@ public:
 		pPlayer->CurrentTransArea = NULL;
 
 		bDidVote = false;
-		msstringlist Parameters;
-		Parameters.add(STRING(sDestName));
-		Parameters.add(STRING(sDestMap));
-		Parameters.add(STRING(sName));
-		pPlayer->CallScriptEvent("game_transition_exited", &Parameters);
+		
+		// Call AngelScript player function for transition exited
+		#ifdef VALVE_DLL
+		CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
+		if (pASManager && pASManager->IsInitialized())
+		{
+			std::vector<std::string> params;
+			params.push_back(STRING(sDestName));
+			params.push_back(STRING(sDestMap));
+			params.push_back(STRING(sName));
+			params.push_back(GETPLAYERAUTHID(pPlayer->edict())); // Add player Steam ID
+			
+			// Call global AngelScript function
+			pASManager->CallGlobalFunctionWithParams("OnPlayerTransitionExited", params);
+		}
+		#endif
 	}
 
 	// MSQuery - Called by CHalfLifeMultiplay::ClientCommand to let me know who voted
@@ -1780,22 +1812,29 @@ public:
 	//           (You can either vote yes or not vote, which means no)
 	void *MSQuery(int iRequest)
 	{
-		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 		IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 		if (pGMScript && (strcmp(pGMScript->GetFirstScriptVar("GM_DISABLE_TRANSITIONS"), "1") == 0))
 			return NULL;
 
 		if (!bDidVote)
 		{
-			if (pGMScript)
+			// Updated to use AngelScript instead of MSScript for map transitions
+			#ifdef VALVE_DLL
+			CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
+			if (pASManager && pASManager->IsInitialized())
 			{
-				msstringlist Parameters;
-				Parameters.add(STRING(sDestName));
-				Parameters.add(STRING(sDestMap));
-				Parameters.add(STRING(sName));
-				Parameters.add(STRING(sDestTrans));
-				pGMScript->CallScriptEvent("game_transition_triggered", &Parameters);
+				std::vector<std::string> params;
+				params.push_back(STRING(sDestName));    // Map title
+				params.push_back(STRING(sDestMap));     // Destination BSP
+				params.push_back(STRING(sName));        // Local spawn point
+				params.push_back(STRING(sDestTrans));   // Destination spawn point
+				
+				// Call AngelScript GameMaster function
+				// This will be handled by MS::GameTransitionTriggered in GameMasterMapTransitions.as
+				pASManager->CallGlobalFunctionWithParams("GameTransitionTriggered", params);
 			}
+			#endif
 			bDidVote = true;
 		}
 
@@ -1841,9 +1880,19 @@ public:
 				if (IS_MAP_VALID(dest_map.c_str()))
 					pOtherPlayer->EnableControl(FALSE);
 
-				msstringlist Parameters;
-				Parameters.add(STRING(sDestMap));
-				pOtherPlayer->CallScriptEvent("game_map_change", &Parameters);
+				// Call AngelScript player function for map change
+				#ifdef VALVE_DLL
+				CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
+				if (pASManager && pASManager->IsInitialized())
+				{
+					std::vector<std::string> params;
+					params.push_back(STRING(sDestMap));
+					params.push_back(GETPLAYERAUTHID(pOtherPlayer->edict())); // Add player Steam ID
+					
+					// Call global AngelScript function
+					pASManager->CallGlobalFunctionWithParams("OnPlayerMapChange", params);
+				}
+				#endif
 
 				//Thothie JUN2007 make sure all trans stats are set right
 				/*

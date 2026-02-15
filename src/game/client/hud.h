@@ -105,7 +105,7 @@ typedef struct
 {
 	char szSpriteName[MAX_SPRITE_NAME_LENGTH];
 	HLSPRITE spr;
-	wrect_t rc;
+	Rect rc;
 	unsigned char r, g, b;
 	int id, index, frame;
 	bool Display;
@@ -283,7 +283,7 @@ public:
 	int Init(void);
 	static char *LocaliseTextString(const char *msg, char *dst_buffer, int buffer_size);
 	static char *BufferedLocaliseTextString(const char *msg);
-	char *LookupString(const char *msg_name, int *msg_dest = NULL);
+	const char *LookupString(const char *msg_name, int *msg_dest = NULL);
 	int MsgFunc_TextMsg(const char *pszName, int iSize, void *pbuf);
 };
 
@@ -343,8 +343,8 @@ public:
 
 	//had to make these public so CHud could access them (to enable concussion icon)
 	//could use a friend declaration instead...
-	void EnableIcon(char *pszIconName, unsigned char red, unsigned char green, unsigned char blue);
-	void DisableIcon(char *pszIconName);
+	void EnableIcon(const char *pszIconName, unsigned char red, unsigned char green, unsigned char blue);
+	void DisableIcon(const char *pszIconName);
 
 private:
 	icon_sprite_t m_IconList[MAX_ICONSPRITES];
@@ -361,7 +361,7 @@ private:
 		char Name[MAX_SPRITE_NAME_LENGTH];
 		char SpriteName[64];
 		HLSPRITE Handle = 0;
-		wrect_t Rectangle{0, 0, 0, 0};
+		Rect Rectangle{0, 0, 0, 0};
 	};
 
 	std::vector<HudSprite> m_Sprites;
@@ -406,11 +406,11 @@ public:
 		return (index < 0) ? 0 : m_Sprites[index].Handle;
 	}
 
-	wrect_t& GetSpriteRect(int index)
+	Rect& GetSpriteRect(int index)
 	{
 		//wrect_t rect = wrect_t.Rectangle{0,0,0,0};
 		//return (index < 0) ? wrect_t{} : m_Sprites[index].Rectangle;
-		wrect_t rect = {0,0,0,0};
+		Rect rect = {0,0,0,0};
 		return (index < 0) ? rect : m_Sprites[index].Rectangle;
 	}
 

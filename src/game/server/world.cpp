@@ -33,6 +33,7 @@
 
 #include "svglobals.h"
 #include "global.h"
+#include "mslogger.h"
 
 extern CGraph WorldGraph;
 extern CSoundEnt *pSoundEnt;
@@ -230,7 +231,7 @@ globalentity_t *CGlobalState ::Find(string_t globalname)
 //#ifdef _DEBUG
 void CGlobalState ::DumpGlobals(void)
 {
-	static char *estates[] = {"Off", "On", "Dead"};
+	static const char *estates[] = {"Off", "On", "Dead"};
 	globalentity_t *pTest;
 
 	ALERT(at_console, "-- Globals --\n");
@@ -300,13 +301,13 @@ int CGlobalState::Save(CSave &save)
 	int i;
 	globalentity_t *pEntity;
 
-	if (!save.WriteFields("GLOBAL", this, m_SaveData, ARRAYSIZE(m_SaveData)))
+	if (!save.WriteFields("GLOBAL", this, m_SaveData, std::size(m_SaveData)))
 		return 0;
 
 	pEntity = m_pList;
 	for (i = 0; i < m_listCount && pEntity; i++)
 	{
-		if (!save.WriteFields("GENT", pEntity, gGlobalEntitySaveData, ARRAYSIZE(gGlobalEntitySaveData)))
+		if (!save.WriteFields("GENT", pEntity, gGlobalEntitySaveData, std::size(gGlobalEntitySaveData)))
 			return 0;
 
 		pEntity = pEntity->pNext;
@@ -321,7 +322,7 @@ int CGlobalState::Restore(CRestore &restore)
 	globalentity_t tmpEntity;
 
 	ClearStates();
-	if (!restore.ReadFields("GLOBAL", this, m_SaveData, ARRAYSIZE(m_SaveData)))
+	if (!restore.ReadFields("GLOBAL", this, m_SaveData, std::size(m_SaveData)))
 		return 0;
 
 	listCount = m_listCount; // Get new list count
@@ -329,7 +330,7 @@ int CGlobalState::Restore(CRestore &restore)
 
 	for (i = 0; i < listCount; i++)
 	{
-		if (!restore.ReadFields("GENT", &tmpEntity, gGlobalEntitySaveData, ARRAYSIZE(gGlobalEntitySaveData)))
+		if (!restore.ReadFields("GENT", &tmpEntity, gGlobalEntitySaveData, std::size(gGlobalEntitySaveData)))
 			return 0;
 		EntityAdd(MAKE_STRING(tmpEntity.name), MAKE_STRING(tmpEntity.levelName), tmpEntity.state);
 	}
@@ -358,21 +359,18 @@ void CGlobalState::ClearStates(void)
 
 void SaveGlobalState(SAVERESTOREDATA *pSaveData)
 {
-	DBG_INPUT;
 	CSave saveHelper(pSaveData);
 	gGlobalState.Save(saveHelper);
 }
 
 void RestoreGlobalState(SAVERESTOREDATA *pSaveData)
 {
-	DBG_INPUT;
 	CRestore restoreHelper(pSaveData);
 	gGlobalState.Restore(restoreHelper);
 }
 
 void ResetGlobalState(void)
 {
-	DBG_INPUT;
 	gGlobalState.ClearStates();
 	gInitHUD = TRUE; // Init the HUD on a new game / load game
 }
@@ -407,10 +405,9 @@ LINK_ENTITY_TO_CLASS(worldspawn, CWorld);
 
 extern DLL_GLOBAL BOOL g_fGameOver;
 
-#include "logger.h"
 void CWorld ::Spawn(void)
 {	
-	logfile << Logger::LOG_INFO << "World Spawn...\n";
+	MS_INFO("World Spawn...");
 
 	g_fGameOver = FALSE;
 	CScriptedEnt::Spawn();
@@ -419,11 +416,17 @@ void CWorld ::Spawn(void)
 	pev->nextthink = pev->ltime + 0.1;
 	MSWorldSpawn();
 
-	logfile << Logger::LOG_INFO << "World Spawn END\n";
+	MS_INFO("World Spawn END");
 }
 void CWorld ::Think(void)
 {
 	CScriptedEnt::Think();
+
+	//error occured skip think until next cycle
+	//I pray for smart pointers every second working with this
+	if (!pev || (uintptr_t)pev == 0xDDDDDDDD) 
+		return;
+
 	pev->nextthink = pev->ltime + 0.1;
 }
 void CWorld ::Activate(void)
@@ -549,7 +552,7 @@ void CWorld ::Precache(void)
 	// 63 testing
 	LIGHT_STYLE(63, "a");
 
-	for (int i = 0; i < ARRAYSIZE(gDecals); i++)
+	for (int i = 0; i < std::size(gDecals); i++)
 		gDecals[i].index = DECAL_INDEX(gDecals[i].name);
 
 	// init the WorldGraph.

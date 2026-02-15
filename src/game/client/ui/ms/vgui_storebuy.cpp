@@ -17,7 +17,6 @@
 	
 //Master Sword
 #include "vgui_storebuy.h"
-#include "logger.h"
 
 //------------
 const char *CStoreBuyPanel::Text_BuySubtitle = "#BUY_SUBTITLE";
@@ -64,6 +63,7 @@ void CStoreBuyPanel::AddInventoryItems()
 
 	return;
 }
+
 bool CStoreBuyPanel::ItemClicked(void *pData)
 {
 	VGUI_ItemButton &ItemButton = *(VGUI_ItemButton *)pData;
@@ -73,6 +73,7 @@ bool CStoreBuyPanel::ItemClicked(void *pData)
 	Close();
 	return true;
 }
+
 void CStoreBuyPanel::ItemHighlighted(void *pData)
 {
 	CStorePanel::ItemHighlighted(pData);
@@ -97,7 +98,7 @@ void CStoreBuyPanel::ItemHighlighted(void *pData)
 					continue;
 
 				char cTemp[256];
-				 _snprintf(cTemp, sizeof(cTemp),  Localized("#ITEM_COST"),  StoreItem.iCost );
+				_snprintf(cTemp, sizeof(cTemp),  Localized("#ITEM_COST"),  StoreItem.iCost );
 				m_InfoPanel->m_SaleText->setText(cTemp);
 				break;
 			}
@@ -112,7 +113,6 @@ void Update_StoreBuy()
 {
 	if (gViewPort->m_pStoreBuyMenu)
 	{
-		gViewPort->m_pStoreBuyMenu->m_AllowUpdate = true;
 		gViewPort->m_pStoreBuyMenu->Update();
 	}
 }

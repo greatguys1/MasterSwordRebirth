@@ -12,7 +12,6 @@
 #include "ms/clglobal.h"
 #include "vgui_scorepanel.h"
 #endif
-#include "logger.h"
 #include "mscharacter.h"
 #include "magic.h"
 #include "script.h"
@@ -186,8 +185,9 @@ jointype_e MSChar_Interface::CanJoinThisMap(savedata_t &Data, msstringlist &Visi
 	//phase this function out.  Use the one below
 	jointype_e JoinType = JN_NOTALLOWED;
 	if (MSGlobals::CanCreateCharOnMap)
-		JoinType = JN_STARTMAP;							   //Can create a character on this map
-	else if (!_stricmp(Data.MapName, MSGlobals::MapName) || //Already in this map Or trying to
+		JoinType = JN_STARTMAP;		//Can create a character on this map
+
+	if (!_stricmp(Data.MapName, MSGlobals::MapName) || //Already in this map Or trying to
 			 !_stricmp(Data.NextMap, MSGlobals::MapName))   //transition to this map
 		JoinType = JN_TRAVEL;
 	else if (HasVisited(MSGlobals::MapName, VisitedMaps) &&
@@ -214,8 +214,9 @@ jointype_e MSChar_Interface::CanJoinThisMap(charinfo_t &CharData, msstringlist &
 {
 	jointype_e JoinType = JN_NOTALLOWED;
 	if (MSGlobals::CanCreateCharOnMap)
-		JoinType = JN_STARTMAP;								   //Can create a character on this map
-	else if (!_stricmp(CharData.MapName, MSGlobals::MapName) || //Already in this map Or trying to
+		JoinType = JN_STARTMAP;	//Can create a character on this map
+
+	if (!_stricmp(CharData.MapName, MSGlobals::MapName) || //Already in this map Or trying to
 			 !_stricmp(CharData.NextMap, MSGlobals::MapName))   //transition to this map
 		JoinType = JN_TRAVEL;
 	else if (HasVisited(MSGlobals::MapName, VisitedMaps) &&

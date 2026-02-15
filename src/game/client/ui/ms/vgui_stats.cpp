@@ -30,10 +30,11 @@ long double GetExpNeeded(int StatValue);
 
 int TestExpArray[SKILL_MAX_ATTACK][STAT_MAGIC_TOTAL];
 
-char *GenderList[] =
-	{
+const char *GenderList[] =
+{
 		"Male",
-		"Female"};
+		"Female"
+};
 
 //------------
 
@@ -65,7 +66,6 @@ static COLOR Color_TitleText = COLOR(255, 255, 255, 0),
 // Creation
 CStatPanel::CStatPanel(Panel *pParent) : CMenuPanel(0, false, 0, 0, ScreenWidth, ScreenHeight)
 {
-	startdbg;
 	setParent(pParent);
 	setVisible(false);
 
@@ -196,7 +196,6 @@ CStatPanel::CStatPanel(Panel *pParent) : CMenuPanel(0, false, 0, 0, ScreenWidth,
 
 	m_pScrollPanel->setScrollValue(0, 0);
 	m_pScrollPanel->validate();
-	enddbg;
 }
 
 //Shuriken read the Exp message from the server.
@@ -522,7 +521,8 @@ int __MsgFunc_SetStat(const char *pszName, int iSize, void *pbuf)
 	}
 	else if (iStatType == 10) //Gender msg
 	{
-		player.m_Gender = READ_BYTE();
+
+		player.m_Gender = static_cast<gender_e>(READ_BYTE());
 	}
 
 	UpdateVGUIStats();

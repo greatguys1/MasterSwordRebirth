@@ -273,7 +273,7 @@ void CHudMessage::MessageDrawScan(client_textmessage_t *pMessage, float time)
 	{
 		m_parms.lineLength = 0;
 		m_parms.width = 0;
-		while ('\0' != *pText && *pText != '\n' && m_parms.lineLength < ARRAYSIZE(line) - 1)
+		while ('\0' != *pText && *pText != '\n' && m_parms.lineLength < std::size(line) - 1)
 		{
 			unsigned char c = *pText;
 			line[m_parms.lineLength] = c;
@@ -440,7 +440,7 @@ int CHudMessage::MsgFunc_HudText(const char *pszName, int iSize, void *pbuf)
 {
 	BEGIN_READ(pbuf, iSize);
 
-	char *pString = READ_STRING();
+	const char *pString = READ_STRING();
 
 	MessageAdd(pString, gHUD.m_flTime);
 	// Remember the time -- to fix up level transitions

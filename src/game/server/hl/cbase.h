@@ -19,7 +19,6 @@ Class Hierachy
 CBaseEntity
 	CBaseDelay
 		CBaseToggle
-			CBaseItem
 			CBaseMonster
 				CBaseCycler
 				CBasePlayer
@@ -43,6 +42,8 @@ CBaseEntity
 
 // UNDONE: This will ignore transition volumes (trigger_transition), but not the PVS!!!
 #define FCAP_FORCE_TRANSITION 0x00000080 // ALWAYS goes across transitions
+
+#include "iscript.h"
 
 #include "archtypes.h"     // DAL
 
@@ -140,6 +141,7 @@ typedef void (CBaseEntity::*USEPTR)(CBaseEntity *pActivator, CBaseEntity *pCalle
 #define CLASS_ALIEN_BIOWEAPON 15  // hornets and snarks.launched by the alien menace
 #define CLASS_BARNACLE 99		  // special because no one pays attention to it, and it eats a wide cross-section of creatures.
 #define CHAR_LEVEL_CAP 45		  // MiB JAN2010_15 Global Level Cap
+#define CLASS_VEHICLE 16 // we use 16 because of MS class defines.
 
 class CBaseEntity;
 class CBaseMonster;
@@ -398,7 +400,10 @@ public:
 	virtual void KeyValue(KeyValueData *pkvd) { pkvd->fHandled = FALSE; }
 	virtual int Save(CSave &save);
 	virtual int Restore(CRestore &restore);
-	virtual int ObjectCaps(void) { return FCAP_ACROSS_TRANSITION; }
+
+	// Strip edicts safety check - prevent saving FL_CLIENTONLY entities
+	virtual int ObjectCaps(void) { return (this->pev->flags & FL_CLIENTONLY) ? FCAP_DONT_SAVE : FCAP_ACROSS_TRANSITION; }
+	
 	virtual void Activate(void) {}
 
 	// Setup the object->object collision box (pev->mins / pev->maxs is the object->world collision box)
@@ -545,32 +550,32 @@ public:
 
 	// Ugly code to lookup all functions to make sure they are exported when set.
 #ifdef _DEBUG
-	void FunctionCheck(void *pFunction, char *name){
+	void FunctionCheck(void *pFunction, const char *name){
 #ifdef _WIN32
 //		if (pFunction && !NAME_FOR_FUNCTION((unsigned long)(pFunction)) )
 //			ALERT( at_error, "No EXPORT: %s:%s (%08lx)\n", STRING(pev->classname), name, (unsigned long)pFunction );
 #endif // _WIN32
 	}
 
-	BASEPTR ThinkSet(BASEPTR func, char *name)
+	BASEPTR ThinkSet(BASEPTR func, const char *name)
 	{
 		m_pfnThink = func;
 		FunctionCheck((void *)*((int *)((char *)this + (offsetof(CBaseEntity, m_pfnThink)))), name);
 		return func;
 	}
-	ENTITYFUNCPTR TouchSet(ENTITYFUNCPTR func, char *name)
+	ENTITYFUNCPTR TouchSet(ENTITYFUNCPTR func, const char *name)
 	{
 		m_pfnTouch = func;
 		FunctionCheck((void *)*((int *)((char *)this + (offsetof(CBaseEntity, m_pfnTouch)))), name);
 		return func;
 	}
-	USEPTR UseSet(USEPTR func, char *name)
+	USEPTR UseSet(USEPTR func, const char *name)
 	{
 		m_pfnUse = func;
 		FunctionCheck((void *)*((int *)((char *)this + (offsetof(CBaseEntity, m_pfnUse)))), name);
 		return func;
 	}
-	ENTITYFUNCPTR BlockedSet(ENTITYFUNCPTR func, char *name)
+	ENTITYFUNCPTR BlockedSet(ENTITYFUNCPTR func, const char *name)
 	{
 		m_pfnBlocked = func;
 		FunctionCheck((void *)*((int *)((char *)this + (offsetof(CBaseEntity, m_pfnBlocked)))), name);
@@ -954,7 +959,7 @@ inline int FNullEnt(CBaseEntity *ent) { return (ent == NULL) || FNullEnt(ent->ed
 
 //---------------------------
 
-char *ButtonSound(int sound); // get string of button sound number
+const char *ButtonSound(int sound); // get string of button sound number
 
 //
 // Generic Button

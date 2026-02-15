@@ -11,8 +11,8 @@
 #include "stats/statdefs.h"
 #include "titles.h"
 #include "scriptedeffects.h"
-#include "logger.h"
 #include "pm_defs.h"
+#include "mslogger.h"
 
 #ifndef VALVE_DLL
 #include "render/clrender.h"
@@ -28,12 +28,12 @@
 #else
 #include "svglobals.h"
 #include "global.h"
+#include "angelscript/ASEngineEventManager.h"
 #endif
 
 #undef SCRIPTVAR
 #define SCRIPTVAR GetVar								//A script-wide or global variable
-#define ERROR_MISSING_PARMS MSErrorConsoleText( "ExecuteScriptCmd", UTIL_VarArgs("Script: %s, %s - not enough parameters!\n", m.ScriptFile.c_str(), Cmd.Name().c_str()) )
-
+#define ERROR_MISSING_PARMS MS_ERROR("ExecuteScriptCmd: Script: %s, %s - not enough parameters!", m.ScriptFile.c_str(), Cmd.Name().c_str())
 #define VecMultiply( a, b ) Vector( a[0] * b[0], a[1] * b[1], a[2] * b[2] )
 void Player_UseStamina(float flAddAmt);
 extern "C" playermove_t *pmove;
@@ -386,7 +386,7 @@ bool GetNextDebugEntity(
 	{
 		if ( rDebugInfo.mTimesLooked == 1 )
 		{
-			rDebugInfo.mpFoundEntity = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+			rDebugInfo.mpFoundEntity = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 		}
 	}
 	else
@@ -544,21 +544,16 @@ bool CScript::ScriptCmd_DebugEntities(
 	return DoDebugEntities(pCallerPlayer, Cmd.Name(), vFilteredParams, NULL);
 }
 
-#define ERROR_MISSING_PARMS_HACK MSErrorConsoleText( "ExecuteScriptCmd", UTIL_VarArgs("Script: %s - not enough parameters!\n", vsCmdName.c_str()) )
-bool DoDebugEntities(
-	CBasePlayer *                         pCallerPlayer
-	, msstring                              vsCmdName
-	, msstringlist                          vFilteredParams
-	, const char *                          pszPrepend
-	)
+#define ERROR_MISSING_PARMS_HACK MS_ERROR("ExecuteScriptCmd: Script: %s - not enough parameters!", vsCmdName.c_str())
+bool DoDebugEntities(CBasePlayer *pCallerPlayer, msstring vsCmdName, msstringlist vFilteredParams, const char *pszPrepend)
 {
-	bool                                bResult = true;
+	bool bResult = true;
 #ifdef VALVE_DLL
-	SDebugInfo                          vDebugInfo;
-	bool                                bIsSub          = (pszPrepend != NULL);
-	msstring                            vsMsgTemplate   = "";
-	size_t                              vParamIndex     = 0;
-	static const char *                 ksPrintEvent    = "ext_debug_que";
+	SDebugInfo vDebugInfo;
+	bool bIsSub = (pszPrepend != NULL);
+	msstring vsMsgTemplate = "";
+	size_t vParamIndex = 0;
+	static const char *ksPrintEvent    = "ext_debug_que";
 
 	if      ( vsCmdName == "dbg_all"            ) vDebugInfo.mTargetType = DBGALL           ;
 	else if ( vsCmdName == "dbg_npcs"           ) vDebugInfo.mTargetType = DBGNPCS          ;
@@ -1178,7 +1173,7 @@ const char* CBaseEntity::GetProp(CBaseEntity *pTarget, msstring &FullParams, mss
 	else if (Prop == "target")
 	{
 		CBaseEntity *pPlayerTarget = pTarget->RetrieveEntity(ENT_TARGET);
-		return pPlayerTarget ? EntToString(pPlayerTarget) : "0";
+		return pPlayerTarget ? EntToString(pPlayerTarget) : msstring("0");
 	}
 	//Thothie MAR2011_10 - return bolt type
 	//- $get(<player>,bolt,[remove])
@@ -1233,7 +1228,7 @@ const char* CBaseEntity::GetProp(CBaseEntity *pTarget, msstring &FullParams, mss
 	{
 		//Thothie JUN2007a - return steamID
 		CBasePlayer *pPlayer = (CBasePlayer *)pTarget;
-		return pPlayer ? pPlayer->AuthID() : "0";
+		return pPlayer ? msstring(pPlayer->AuthID()) : msstring("0");
 	}
 	else if (Prop == "playerspawn")
 	{
@@ -1246,7 +1241,7 @@ const char* CBaseEntity::GetProp(CBaseEntity *pTarget, msstring &FullParams, mss
 	else if (Prop == "spawner")
 	{
 		//DEC2007a - Return msmonster spawn ID to verify still exists
-		return (pMonster ? pMonster->m_spawnedby : "0");
+		return (pMonster ? msstring(pMonster->m_spawnedby) : msstring("0"));
 	}
 	else if (Prop == "roam")
 	{
@@ -1292,7 +1287,7 @@ const char* CBaseEntity::GetProp(CBaseEntity *pTarget, msstring &FullParams, mss
 
 	else if (pScripted)
 	{
-		if (Prop == "scriptvar") return pScripted->GetFirstScriptVar(Params.size() >= 3 ? Params[2] : "");
+		if (Prop == "scriptvar") return pScripted->GetFirstScriptVar(Params.size() >= 3 ? msstring(Params[2]) : msstring(""));
 		//Thothie JAN2013_15 - has effect
 		else if (Prop == "haseffect")
 		{
@@ -1473,7 +1468,7 @@ const char* CBaseEntity::GetProp(CBaseEntity *pTarget, msstring &FullParams, mss
 			else if (Prop == "stepsize") RETURN_FLOAT(pMonster->m_StepSize)	//MiB DEC2007a
 			else if (Prop == "movetype") RETURN_INT(pTarget->pev->movetype) //Thothie JAN2013_20 (post patch)
 			else if (Prop == "name.full") return SPEECH::NPCName(pMonster);
-			else if (Prop == "name.prefix") return pMonster->DisplayPrefix.len() ? (pMonster->DisplayPrefix) : (""); //Thothie JAN2011_30
+			else if (Prop == "name.prefix") return pMonster->DisplayPrefix.len() ? msstring(pMonster->DisplayPrefix) : msstring(""); //Thothie JAN2011_30
 			else if (Prop == "name.full.capital")	return SPEECH::NPCName(pMonster, true);
 			else if (Prop == "dmgmulti") RETURN_FLOAT(pMonster->m_DMGMulti) //APR2008a
 			else if (Prop == "hpmulti") RETURN_FLOAT(pMonster->m_HPMulti) //APR2008a
@@ -1519,8 +1514,11 @@ const char* CBaseEntity::GetProp(CBaseEntity *pTarget, msstring &FullParams, mss
 				{
 					RETURN_INT(pPlayer->m_CurrentHand); //0=Left Hand Active, 1=Right Hand Active (active hand=left click, off hand=right click)
 				}
-				else if (Prop == "glowcolor") RETURN_VECTOR(pPlayer->mGlowColor) // MiB APR2019_10 [GLOW_COLOR] - Glow color
-				else if (Prop == "gender")	return (pPlayer->m_Gender == GENDER_MALE) ? "male" : "female";
+				else if (Prop == "glowcolor") RETURN_VECTOR(pPlayer->m_GlowColor) // MiB APR2019_10 [GLOW_COLOR] - Glow color
+				else if (Prop == "gender")
+				{
+					return (pPlayer->m_Gender == GENDER_MALE) ? "male" : "female";
+				}
 				else if (Prop == "ip") //MiB Dec2007a Returns the ip address of the player NOTE: This COULD be loopback.
 				{
 #ifdef VALVE_DLL
@@ -1683,7 +1681,7 @@ const char* CBaseEntity::GetProp(CBaseEntity *pTarget, msstring &FullParams, mss
 			}
 		}
 	}
-	else return "¯NA¯";
+	else return "-NA-";
 
 	return fSuccess ? "1" : "0";
 }
@@ -2239,6 +2237,14 @@ bool CScript::ScriptCmd_CallEvent(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstrin
 			{
 				Type = CE_EXTERNAL_PLAYERS;
 			}
+			else if (Params[0] == "gamemaster")
+			{
+#if VALVE_DLL
+				CBaseEntity *pEntity = UTIL_FindEntityByString(nullptr, "netname", msstring("-") + "game_master");
+				if (pEntity) pScripted = pEntity->GetScripted();
+#endif
+				Type = CE_EXTERNAL;
+			}
 			else
 			{
 				CBaseEntity *pEntity = m.pScriptedEnt->RetrieveEntity(Params[NextParm]);
@@ -2281,7 +2287,8 @@ bool CScript::ScriptCmd_CallEvent(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstrin
 			{
 				SCRIPT_EVENT *seEvent = EventByName(EventName);
 				if (seEvent) CallEventTimed(EventName, Delay);
-				else MSErrorConsoleText("ExecuteScriptCmd", UTIL_VarArgs("Script: %s, callevent (timed) - event %s NOT FOUND!\n", m.ScriptFile.c_str(), EventName));
+				else
+					MS_ERROR("ExecuteScriptCmd Script: %s, callevent (timed) - event %s NOT FOUND!", m.ScriptFile.c_str(), EventName);
 			}
 		}
 		else
@@ -2353,7 +2360,7 @@ bool CScript::ScriptCmd_ChangeLevel(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstr
 	{
 		sTemp = Params[0];
 		//CHANGE_LEVEL( (char *)STRING(sDestMap), NULL );
-		CHANGE_LEVEL(sTemp.c_str(), NULL);
+		CHANGE_LEVEL(sTemp, NULL);
 		//clear music/weather for next map
 		MSGlobals::map_addparams = ""; //DEC2014_17 Thothie - global addparams
 		MSGlobals::map_flags = ""; //DEC2014_17 Thothie - map flags
@@ -2385,7 +2392,8 @@ bool CScript::ScriptCmd_ChatLog(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringl
 		}
 
 		//Print ( "chatlog: %s \n", sTemp.c_str() );
-		chatlog << msTemp.c_str() << std::endl;
+		MS_CHAT("%s", msTemp.c_str());
+
 	}
 	else ERROR_MISSING_PARMS;
 #endif
@@ -2745,12 +2753,13 @@ bool CScript::ScriptCmd_ConflictCheck(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, mss
 					{
 						cc_found = true;
 						Print("Conflictcheck: conflict with var %s in %s:\n", pScripted->m_Scripts[s]->m_Constants[c].Name.c_str(), pScripted->m_Scripts[0]->m.ScriptFile.c_str());
-						MSErrorConsoleText("", UTIL_VarArgs("Script: %s, %s const/setvard confict!\n", m.ScriptFile.c_str(), pScripted->m_Scripts[s]->m_Variables[i].Name.c_str()));
+						MS_ERROR("Script: %s, %s const/setvard confict!", m.ScriptFile.c_str(), pScripted->m_Scripts[s]->m_Variables[i].Name.c_str());
 					}
 				} //consts
 			} //vars
 		} //scripts
-		if (!cc_found) Print("Conflictcheck: No conflicts found in %s\n", pScripted->m_Scripts[0]->m.ScriptFile.c_str());
+		if (!cc_found) 
+			Print("Conflictcheck: No conflicts found in %s\n", pScripted->m_Scripts[0]->m.ScriptFile.c_str());
 	}
 #endif
 
@@ -2788,7 +2797,55 @@ bool CScript::ScriptCmd_Create(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringli
 			CGenericItem *pNewItem = NewGenericItem( Params[0] );
 			pEntity = pNewItem; pScript = pNewItem;
 			if( pNewItem )
+			{
 				pNewItem->pev->origin = Position;
+				
+#ifdef VALVE_DLL
+				// Fire AngelScript engine event for treasure/item spawning
+				ASEngineEventManager* pEventManager = ASEngineEventManager::Instance();
+				if (pEventManager)
+				{
+					// Check if this looks like a treasure/loot item by checking the script name
+					bool isTreasure = false;
+					const char* pszItemName = Params[0].c_str();
+					
+					// Consider it treasure if the script name contains treasure-related keywords
+					if (strstr(pszItemName, "treasure") || 
+					    strstr(pszItemName, "chest") ||
+					    strstr(pszItemName, "loot") ||
+					    strstr(pszItemName, "artifact") ||
+					    strstr(pszItemName, "rare") ||
+					    strstr(pszItemName, "epic") ||
+					    strstr(pszItemName, "legendary"))
+					{
+						isTreasure = true;
+					}
+					
+					// Also consider items created by treasure-related scripts as treasure
+					if (m.pScriptedEnt && m.pScriptedEnt->pev->classname)
+					{
+						const char* pszCreatorClass = STRING(m.pScriptedEnt->pev->classname);
+						if (strstr(pszCreatorClass, "treasure") || 
+						    strstr(pszCreatorClass, "chest") ||
+						    strstr(pszCreatorClass, "loot"))
+						{
+							isTreasure = true;
+						}
+					}
+					
+					// Fire the event if this is considered treasure
+					if (isTreasure)
+					{
+						pEventManager->FireTreasureSpawnedEvent(
+							pszItemName,
+							Position.x,
+							Position.y,
+							Position.z
+						);
+					}
+				}
+#endif
+			}
 		}
 
 		if( pEntity )
@@ -2840,7 +2897,6 @@ bool CScript::ScriptCmd_DarkenBloom(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstr
 //- developer builds only.
 bool CScript::ScriptCmd_Debug(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringlist &Params)
 {
-#if !TURN_OFF_ALERT
 	msstring sTemp;
 	for(int i = 0; i < Params.size(); i++)
 		sTemp += (i ? msstring(" ") : msstring("")) + Params[i];
@@ -2857,8 +2913,8 @@ bool CScript::ScriptCmd_Debug(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringlis
 #ifndef VALVE_DLL
 	LocationString = "Client";
 #endif
-	Print("* Script Debug (%s): %s - %s\n", LocationString, m.pScriptedEnt ? m.pScriptedEnt->DisplayName() : "(No Entity)", sTemp.c_str());
-#endif
+	//Print("* Script Debug (%s): %s - %s\n", LocationString, m.pScriptedEnt ? m.pScriptedEnt->DisplayName() : "(No Entity)", sTemp.c_str());
+	MS_DEBUG("* Script Debug (%s): %s - %s", LocationString, m.pScriptedEnt ? m.pScriptedEnt->DisplayName() : "(No Entity)", sTemp.c_str());
 
 	return true;
 }
@@ -4411,8 +4467,8 @@ bool CScript::ScriptCmd_Name(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringlist
 
 			if (m.pScriptedEnt->pev && !m.pScriptedEnt->pev->netname)
 			{
-				//m.pScriptedEnt->pev->netname = ALLOC_STRING( msstring("¯") + Name );
-				m.pScriptedEnt->m_NetName = msstring("¯") + Name;
+				//m.pScriptedEnt->pev->netname = ALLOC_STRING( msstring("-") + Name );
+				m.pScriptedEnt->m_NetName = msstring("-") + Name;
 				m.pScriptedEnt->pev->netname = MAKE_STRING(m.pScriptedEnt->m_NetName.c_str());
 			}
 			m.pScriptedEnt->m_DisplayName = GetScriptVar(Name);
@@ -4449,8 +4505,8 @@ bool CScript::ScriptCmd_NameUnique(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstri
 	{
 		if (m.pScriptedEnt)
 		{
-			//m.pScriptedEnt->pev->netname = ALLOC_STRING( msstring("¯") + Params[0] );
-			m.pScriptedEnt->m_NetName = msstring("¯") + Params[0];
+			//m.pScriptedEnt->pev->netname = ALLOC_STRING( msstring("-") + Params[0] );
+			m.pScriptedEnt->m_NetName = msstring("-") + Params[0];
 			m.pScriptedEnt->pev->netname = MAKE_STRING(m.pScriptedEnt->m_NetName.c_str());
 		}
 	}	//Need braces
@@ -4575,7 +4631,7 @@ bool CScript::ScriptCmd_PlayerName(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstri
 			sTemp = Params[1];
 			//Print("Setting name %s on %s\n", sTemp.c_str(), pEntity->m_DisplayName.c_str() );
 			pEntity->m_DisplayName = sTemp;
-			g_engfuncs.pfnSetClientKeyValue(pEntity->entindex(), g_engfuncs.pfnGetInfoKeyBuffer(pEntity->edict()), "name", (char *)pEntity->m_DisplayName);
+			g_engfuncs.pfnSetClientKeyValue(pEntity->entindex(), g_engfuncs.pfnGetInfoKeyBuffer(pEntity->edict()), const_cast<char*>("name"), const_cast<char*>(pEntity->m_DisplayName.c_str()));
 			(pEntity->DisplayName());
 			pEntity->m_NetName = pEntity->DisplayName();
 			pEntity->pev->netname = MAKE_STRING(pEntity->m_NetName.c_str());
@@ -4884,12 +4940,12 @@ bool CScript::ScriptCmd_Quest(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringlis
 				msstring qd_outline;
 				qd_outline = UTIL_VarArgs("Dumping Quest Data for %s:\n",pEntity->m_DisplayName.c_str());
 				Print ("%s",qd_outline.c_str());
-				logfile << qd_outline.c_str();
+				MS_DEBUG(qd_outline.c_str());
 				for(int i = 0; i < pPlayer->m_Quests.size(); i++)
 				{
 					qd_outline = UTIL_VarArgs("#%i name: %s data: %s\n",i,pPlayer->m_Quests[i].Name.c_str(),pPlayer->m_Quests[i].Data.c_str());
 					Print ("%s",qd_outline.c_str());
-					logfile << qd_outline.c_str();
+					MS_DEBUG(qd_outline.c_str());
 				}
 			}
 		}
@@ -5330,12 +5386,13 @@ bool CScript::ScriptCmd_ScriptFlags(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstr
 				else
 				{
 					//couldn't find it
-					MSErrorConsoleText( "ExecuteScriptCmd", UTIL_VarArgs("Script: %s, %s - scriptflags edit - couldn't find name %s.\n", m.ScriptFile.c_str(), Cmd.Name().c_str(), Params[2].c_str() ) );
+					MS_ERROR("ExecuteScriptCmd Script: %s, %s - scriptflags edit - couldn't find name %s.", m.ScriptFile.c_str(), Cmd.Name().c_str(), Params[2].c_str());
 				}
 			}
 			else
 			{
-				if ( Params[1] == "edit" ) MSErrorConsoleText( "ExecuteScriptCmd", UTIL_VarArgs("Script: %s, %s - scriptflags edit - not enough parameters.\n", m.ScriptFile.c_str(), Cmd.Name().c_str() ) );
+				if ( Params[1] == "edit" ) 
+					MS_ERROR("ExecuteScriptCmd Script: %s, %s - scriptflags edit - not enough parameters.", m.ScriptFile.c_str(), Cmd.Name().c_str());
 			}
 
 			if ( Params[1] == "remove" )
@@ -5438,7 +5495,7 @@ bool CScript::ScriptCmd_ScriptFlags(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstr
 		}
 		else
 		{
-			MSErrorConsoleText( "scriptflags", UTIL_VarArgs("target entity not found in %s\n",m.ScriptFile.c_str()) );
+			MS_ERROR("scriptflags target entity not found in %s", m.ScriptFile.c_str());
 		}
 	}
 	else ERROR_MISSING_PARMS;
@@ -6286,7 +6343,8 @@ bool CScript::ScriptCmd_SetQuality(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstri
 			pItem->Quality = atof(Params[1]);
 			if ( Params.size() >= 3 ) pItem->MaxQuality = atof(Params[2]);
 		}
-		else MSErrorConsoleText( "ScriptCmd_SetQuality", UTIL_VarArgs("Script: %s, %s - Warning: attempted to use setquality on non-item.\n", m.ScriptFile.c_str(), Cmd.Name().c_str()));
+		else
+			MS_ERROR("ScriptCmd_SetQuality: Script: %s, %s - Warning: attempted to use setquality on non-item.", m.ScriptFile.c_str(), Cmd.Name().c_str());
 	}
 	else ERROR_MISSING_PARMS;
 #endif
@@ -6311,7 +6369,8 @@ bool CScript::ScriptCmd_setquantity(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstr
 		{
 			pItem->iQuantity = atof(Params[1]);
 		}
-		else MSErrorConsoleText( "ScriptCmd_setquantity", UTIL_VarArgs("Script: %s, %s - Warning: attempted to use setquantity on non-item.\n", m.ScriptFile.c_str(), Cmd.Name().c_str()));
+		else
+			MS_ERROR("ScriptCmd_setquantity: Script: %s, %s - Warning: attempted to use setquantity on non-item.", m.ScriptFile.c_str(), Cmd.Name().c_str());
 	}
 	else ERROR_MISSING_PARMS;
 #endif
@@ -6525,11 +6584,11 @@ bool CScript::ScriptCmd_SetTrans(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstring
 		{
 			CBasePlayer* pPlayer = (CBasePlayer*)pEntity;
 			if (pPlayer->m_SpawnTransition != NULL)
-				strncpy(pPlayer->m_SpawnTransition, Params[1], 32);
+				strncpy((char*)pPlayer->m_SpawnTransition, Params[1], 32);
 		}
 		else
 		{
-			MSErrorConsoleText( "ExecuteScriptCmd", UTIL_VarArgs("Script: %s, %s - settrans tried to affect non-player!\n", m.ScriptFile.c_str(), Cmd.Name().c_str() ) );
+			MS_ERROR("ExecuteScriptCmd: Script: %s, %s - settrans tried to affect non-player!", m.ScriptFile.c_str(), Cmd.Name().c_str());
 		}
 	}
 	else ERROR_MISSING_PARMS;
@@ -7029,8 +7088,7 @@ bool CScript::ScriptCmd_ToSpawn(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringl
 		CBasePlayer *pPlayer = pEntity->IsPlayer() ? (CBasePlayer *)pEntity : NULL;
 		if( pPlayer )
 		{
-			if ( Params.size() >= 2 ) strncpy(pPlayer->m_SpawnTransition, Params[1], 32);
-			pPlayer->m_JoinType = 2;
+			if ( Params.size() >= 2 ) strncpy((char*)pPlayer->m_SpawnTransition, Params[1], 32);
 			CBaseEntity *pSpawnSpot = pPlayer->FindSpawnSpot();
 			UTIL_SetOrigin( pPlayer->pev, pSpawnSpot->pev->origin );
 			pPlayer->pev->angles = pSpawnSpot->pev->angles;
@@ -7129,7 +7187,7 @@ bool CScript::ScriptCmd_VectorSet(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstrin
 		if (Params[1] == "x")		Prop = &ModifyVec.x;
 		else if (Params[1] == "y") Prop = &ModifyVec.y;
 		else if (Params[1] == "z") Prop = &ModifyVec.z;
-		else MSErrorConsoleText("CScript::ScriptCmd_VectorSet", UTIL_VarArgs("Script: %s, %s - '%s' not a valid vector coordinate!\n", m.ScriptFile.c_str(), Cmd.Name().c_str(), Params[1].c_str()));
+		else MS_ERROR("CScript::ScriptCmd_VectorSet: Script: %s, %s - '%s' not a valid vector coordinate!", m.ScriptFile.c_str(), Cmd.Name().c_str(), Params[1].c_str());
 
 		if (Prop) *Prop = atof(Params[2]);
 
@@ -7320,11 +7378,11 @@ bool CScript::ScriptCmd_WriteLine(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstrin
 //- if first param is an entity and the second is not 'direct', then auto-aimed hitscan damage, the second param defining the max range of the attack.
 //- <inflictor> and <attacker> should usually match, save when used in weapons or projectiles, in which case <inflicter> should indicate said items.
 //- [flag_string] - multiple flags can be added, if seperated by semi-colons, flags follow:
-//-- � "dmgevent:<prefix>"
+//-- (c) "dmgevent:<prefix>"
 //-- You can use this to setup seperate _dodamage processing events for each attack
 //-- This will call <prefix>_dodamage, in addition to the usual game_dodamage, on the <attacker>
 //-- If prefix begins with * - <prefix>_dodamage will be called on <inflictor> instead of <attacker>, sans the * (for weapons)
-//� "nodecal"
+//(c) "nodecal"
 //-- Causes trace damage events not to decal walls (note that they still fire hitwall/game_hitworld when calling from an item/weapon script)
 bool CScript::ScriptCmd_XDoDamage(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringlist &Params)
 {
@@ -7568,36 +7626,14 @@ msstring scriptfile_t::ScriptFile_ReadLine(int lineNum)
 //Append a line
 void scriptfile_t::ScriptFile_WriteLine(msstring line)
 {
-	//ScriptFile_WriteLine( line , Lines.size() );
-	AddLine(line, -1, false);
-
-	char cFileName[MAX_PATH];
-	_snprintf(cFileName, sizeof(cFileName), "%s/%s", EngineFunc::GetGameDir(), fileName.c_str());
-	Logger mibfile;
-	mibfile.open(cFileName, 1);
-	mibfile << line << "\n";
-
-	mibfile.close();
+	// no more writing to text files, just use AS instead. not used in any script so doesn't hurt anything to remove it.
+	return;
 }
 //Write a line at X, possibly overwriting or just inserting
 void scriptfile_t::ScriptFile_WriteLine(msstring line, int lineNum, bool overwrite)
 {
-	char cFileName[MAX_PATH];
-	_snprintf(cFileName, sizeof(cFileName), "%s/%s", EngineFunc::GetGameDir(), fileName.c_str());
-	Logger mibfile;
-	mibfile.open(cFileName, 0);
-
-	AddLine(line, lineNum, overwrite);
-
-	//Write all the lines to the specified file
-	for(int i = 0; i < Lines.size(); i++)
-	{
-		mibfile << Lines[i]; //<< ";"; //Add the necessary ';' for rereads
-		if (i != (signed)Lines.size() - 1) //If this isn't the last line
-			mibfile << "\n"; //Add a line break
-	}
-
-	mibfile.close(); //Close the file, if not for making sure that changes save, then for making sure we don't get overlapping handles
+	// no more writing to text files, just use AS instead. not used in any script so doesn't hurt anything to remove it.
+	return;
 }
 //==================================
 

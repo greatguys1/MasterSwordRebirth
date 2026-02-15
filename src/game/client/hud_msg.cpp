@@ -21,12 +21,14 @@
 #include "cl_util.h"
 #include "parsemsg.h"
 #include "string.h"
-#include "logger.h"
 #include "mscharacter.h"
 #include "clglobal.h"
 #include "clenv.h"
 #include "vgui_choosecharacter.h"
 #include "monsters/msmonster.h"
+#include "mslogger.h"
+#include "ms/angelscript/CAngelScriptManager.h"
+#include <angelscript.h>
 
 int CHud ::MsgFunc_ResetHUD(const char *pszName, int iSize, void *pbuf)
 {
@@ -51,24 +53,23 @@ int CHud ::MsgFunc_ResetHUD(const char *pszName, int iSize, void *pbuf)
 
 void CHud ::MsgFunc_InitHUD(const char *pszName, int iSize, void *pbuf)
 {
-	startdbg;
-	dbg("Read InitHUD msg");
-
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: EndMap]\n";
+	MS_INFO("[MsgFunc_InitHUD: EndMap]");
 	MSGlobals::EndMap(); //End old map
 
 	//Copy over the mapname here because the engine doesn't send it
 	//interally until later
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: Globals]\n";
+	MS_INFO("[MsgFunc_InitHUD: Globals]");
 	BEGIN_READ(pbuf, iSize);
 	MSGlobals::ServerName = READ_STRING();
 	MSGlobals::MapName = READ_STRING();
 	//g_NetCode.m.HostIP = READ_STRING();
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: CLEnt Readin]\n";
+
+	MS_INFO("[MsgFunc_InitHUD: CLEnt Readin]");
 	for (int i = 0; i < CLPERMENT_TOTALK; i++)
 		MSGlobals::ClEntities[i] = READ_SHORT();
 	int flags = READ_BYTE();
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: SetupDefGlobals]\n";
+
+	MS_INFO("[MsgFunc_InitHUD: SetupDefGlobals]");
 	MSCLGlobals::OnMyOwnListenServer = (flags & (1 << 0)) ? true : false;
 	MSGlobals::IsLanGame = (flags & (1 << 1)) ? true : false;
 	MSGlobals::CanCreateCharOnMap = (flags & (1 << 2)) ? true : false;
@@ -76,22 +77,22 @@ void CHud ::MsgFunc_InitHUD(const char *pszName, int iSize, void *pbuf)
 	MSGlobals::ServerSideChar = (flags & (1 << 4)) ? true : false;
 	MSCLGlobals::OtherPlayers = (flags & (1 << 5)) ? true : false;
 
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: AuthID]\n";
 	MSCLGlobals::AuthID = READ_STRING();
 	int VotesAllowed = READ_BYTE();
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: Charnum]\n";
-	ChooseChar_Interface::ServerCharNum = READ_BYTE(); //Number of characters the server allows you to have
+	MS_INFO("[MsgFunc_InitHUD: AuthID] %s", MSCLGlobals::AuthID.c_str());
 
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: Clearvotes]\n";
+	ChooseChar_Interface::ServerCharNum = READ_BYTE(); //Number of characters the server allows you to have
+	MS_INFO("[MsgFunc_InitHUD: Charnum] %d", ChooseChar_Interface::ServerCharNum);
+
+	MS_INFO("[MsgFunc_InitHUD: Clearvotes]");
 	vote_t::VotesTypesAllowed.clearitems();
 	for (int i = 0; i < vote_t::VotesTypes.size(); i++)
 		if (FBitSet(VotesAllowed, (1 << i)))
 			vote_t::VotesTypesAllowed.add(vote_t::VotesTypes[i]);
 
-	dbg("Call InitHUDData() on all");
 	// prepare all hud data
 
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: InitHUDData]\n";
+	MS_INFO("[MsgFunc_InitHUD: InitHUDData]");
 	for (auto hudElement : m_HudList)
 	{
 		hudElement->InitHUDData();
@@ -100,17 +101,93 @@ void CHud ::MsgFunc_InitHUD(const char *pszName, int iSize, void *pbuf)
 	//This would normally be called only after the scripts
 	//were downloaded... but since downloading new scripts
 	//isn't supported anymore, just call it
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: SpawnIntoServer]\n";
-	dbg("Call SpawnIntoServer( )");
+	MS_INFO("[MsgFunc_InitHUD: SpawnIntoServer]");
 	MSCLGlobals::SpawnIntoServer();
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: NewMap]\n";
+
+	MS_INFO("[MsgFunc_InitHUD: NewMap]");
 	MSGlobals::NewMap(); //Start new map
 
 	//Do this last
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: InitNewLevel]\n";
+	MS_INFO("[MsgFunc_InitHUD: InitNewLevel]");
 	CEnvMgr::InitNewLevel();
-	logfile << Logger::LOG_INFO << "[MsgFunc_InitHUD: Complete]\n";
-	enddbg;
+
+	MS_INFO("[MsgFunc_InitHUD: Complete]");
+
+	// Call client-side VGUI test script
+	MS_INFO("[MsgFunc_InitHUD: Calling CreateTestControlPanel]");
+
+	asIScriptEngine* engine = CAngelScriptManager::Instance()->GetEngine();
+	if (engine)
+	{
+		asUINT moduleCount = engine->GetModuleCount();
+		MS_INFO("[MsgFunc_InitHUD: Found %u loaded modules]", moduleCount);
+
+		// Search all modules for the CreateTestControlPanel function
+		asIScriptFunction* func = nullptr;
+		asIScriptModule* foundModule = nullptr;
+
+		for (asUINT i = 0; i < moduleCount; i++)
+		{
+			asIScriptModule* module = engine->GetModuleByIndex(i);
+			if (!module)
+				continue;
+
+			const char* moduleName = module->GetName();
+			MS_INFO("[MsgFunc_InitHUD: Checking module '%s']", moduleName);
+
+			func = module->GetFunctionByName("CreateTestControlPanel");
+			if (func)
+			{
+				foundModule = module;
+				MS_INFO("[MsgFunc_InitHUD: Found CreateTestControlPanel in module '%s']", moduleName);
+				break;
+			}
+		}
+
+		if (func && foundModule)
+		{
+			// Create and execute the function
+			asIScriptContext* ctx = engine->CreateContext();
+			if (ctx)
+			{
+				int r = ctx->Prepare(func);
+				if (r >= 0)
+				{
+					r = ctx->Execute();
+					if (r == asEXECUTION_FINISHED)
+					{
+						MS_INFO("[MsgFunc_InitHUD: CreateTestControlPanel executed successfully]");
+					}
+					else if (r == asEXECUTION_EXCEPTION)
+					{
+						MS_ERROR("[MsgFunc_InitHUD: Exception in CreateTestControlPanel: %s]",
+								 ctx->GetExceptionString());
+					}
+					else
+					{
+						MS_ERROR("[MsgFunc_InitHUD: CreateTestControlPanel execution failed: %d]", r);
+					}
+				}
+				else
+				{
+					MS_ERROR("[MsgFunc_InitHUD: Failed to prepare CreateTestControlPanel function]");
+				}
+				ctx->Release();
+			}
+			else
+			{
+				MS_ERROR("[MsgFunc_InitHUD: Failed to create AngelScript context]");
+			}
+		}
+		else
+		{
+			MS_INFO("[MsgFunc_InitHUD: CreateTestControlPanel function not found in any module]");
+		}
+	}
+	else
+	{
+		MS_ERROR("[MsgFunc_InitHUD: AngelScript engine not available]");
+	}
 }
 
 int CHud ::MsgFunc_GameMode(const char *pszName, int iSize, void *pbuf)

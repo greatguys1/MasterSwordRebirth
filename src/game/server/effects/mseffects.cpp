@@ -2,7 +2,7 @@
 #include "script.h"
 #include "mseffects.h"
 #include "shake.h"
-#include "logger.h"
+#include "ms/angelscript/CAngelScriptManager.h" // For AngelScript map transitions
 //#include "monsters/bodyparts/bodyparts.h"
 
 void UTIL_ScreenFadeBuild(ScreenFade &fade, const Vector &color, float fadeTime, float fadeHold, int alpha, int flags);
@@ -421,17 +421,24 @@ class CMSChangeLevel : public CBaseEntity
 	{
 		//MAR2008a - Thothie - Let game master handle mstrig_changelevel level changes
 		//- original: CHANGE_LEVEL( (char *)STRING(sDestMap), NULL );
-		CBaseEntity *pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
-		IScripted *pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
-		if (pGMScript)
+		// Updated to use AngelScript instead of MSScript for map transitions
+		#ifdef VALVE_DLL
+		CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
+		if (pASManager && pASManager->IsInitialized())
 		{
-			msstringlist Parameters;
-			Parameters.add(STRING(sDestMap));
-			Parameters.add(STRING(sDestTrans));
-			pGMScript->CallScriptEvent("gm_manual_map_change", &Parameters);
+			std::vector<std::string> params;
+			params.push_back(STRING(sDestMap));
+			params.push_back(STRING(sDestTrans));
+			
+			// Call AngelScript GameMaster function
+			// This will be handled by MS::ExecuteManualMapChange in GameMasterMapTransitions.as
+			pASManager->CallGlobalFunctionWithParams("ExecuteManualMapChange", params);
 		}
 		else
-			ALERT(at_console, "Unable to find game_master for level change!\n");
+		{
+			ALERT(at_console, "Unable to execute changelevel - AngelScript not initialized!\n");
+		}
+		#endif
 	}
 	void KeyValue(KeyValueData *pkvd)
 	{
@@ -460,8 +467,6 @@ LINK_ENTITY_TO_CLASS(mstrig_changelevel, CMSChangeLevel);
 
 void CScript::ScriptedEffect(msstringlist &Params)
 {
-	startdbg;
-	dbg("Begin");
 	if (!Params.size())
 	{
 		ALERT(at_console, "Script: %s, effect missing parameters!\n", m.ScriptFile.c_str());
@@ -488,7 +493,6 @@ void CScript::ScriptedEffect(msstringlist &Params)
 
 	//[/Thothie]
 
-	dbg(Params[0]);
 
 	//Thothie MAR2008a - major changes to beam
 	//- beam ents now works (never could get it to work before), also changed syntax (see below)
@@ -954,5 +958,4 @@ void CScript::ScriptedEffect(msstringlist &Params)
 
 		Print("Decal: %i @ %s\n", decalidx, Params[1].c_str());
 	}
-	enddbg("CScript::ScriptedEffect()");
 }

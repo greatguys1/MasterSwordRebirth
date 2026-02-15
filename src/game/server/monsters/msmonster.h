@@ -4,6 +4,8 @@
 #include "monsteranimation.h"
 #include "genitemlist.h"
 #include "stats/stats.h"
+#include "iscript.h"
+
 
 class CStore;
 class CMSMonster;
@@ -253,7 +255,7 @@ public:
 	int m_Gold;	// Amount of gold I'm carrying
 	int m_OldGold; // Last Gold Value - for updating
 
-	byte m_Gender;			//My Gender (default male)
+	gender_e m_Gender;		//My Gender (default male)
 	bool m_fSpawnOnTrigger, //Spawn only when triggered?
 		m_UseExpStat;		//Whether m_ExpStat & m_ExpProp are valid
 
@@ -321,6 +323,7 @@ public:
 	CBaseBody *Body;								//If this monster uses body parts
 	CItemList Gear;									//This monster's gear
 	mslist<menuoption_t> m_MenuOptions[MAXPLAYERS]; //The current menu options for each player
+	bool m_MenuOptionsProtected[MAXPLAYERS];		//Protection flag for vote menus (prevents old system from clearing)
 	mslist<menuoption_t> *m_MenuCurrentOptions;		//Only set during OpenMenu - Used in script operations
 
 	CStore *OpenStore;					   //Current store I'm offering to someone

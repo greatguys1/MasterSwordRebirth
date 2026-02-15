@@ -7,9 +7,11 @@
 #include "stats/stats.h"
 #include "stats/races.h"
 #include "msitemdefs.h"
-#include "logger.h"
 
-#define ERROR_MISSING_PARMS MSErrorConsoleText("CGenericItem::ExecuteScriptCmd", UTIL_VarArgs("Script: %s, %s - not enough parameters!\n", Script->m.ScriptFile.c_str(), Cmd.Name().c_str()))
+// TODO: get rid of the macro for logging when we get rid of MSScript.
+#include "mslogger.h"
+
+#define ERROR_MISSING_PARMS MS_ERROR("CGenericItem::ExecuteScriptCmd: Script: %s, %s - not enough parameters!", Script->m.ScriptFile.c_str(), Cmd.Name().c_str())
 
 scriptcmdname_list CMSMonster::m_ScriptCommands;
 
@@ -99,11 +101,7 @@ bool CMSMonster::Script_ExecuteCmd(CScript *Script, SCRIPT_EVENT &Event, scriptc
 #ifdef VALVE_DLL
 
 	// Executes a single script event
-	startdbg;
-
 	msstring sTemp;
-
-	dbg(msstring("Command: ") + Cmd.Name());
 
 	//************************** SAY **************************
 	if (Cmd.Name() == "say")
@@ -263,7 +261,7 @@ bool CMSMonster::Script_ExecuteCmd(CScript *Script, SCRIPT_EVENT &Event, scriptc
 			else if (Params[0] == "none")
 				m_bloodColor = DONT_BLEED;
 			else
-				MSErrorConsoleText("CGenericItem::ExecuteScriptCmd", UTIL_VarArgs("Script: %s, %s - invalid blood color!\n", Script->m.ScriptFile.c_str(), Cmd.Name().c_str()));
+				MS_ERROR("CGenericItem::ExecuteScriptCmd: Script: %s, %s - invalid blood color!", Script->m.ScriptFile.c_str(), Cmd.Name().c_str());
 		}
 		else
 			ERROR_MISSING_PARMS;
@@ -467,9 +465,10 @@ bool CMSMonster::Script_ExecuteCmd(CScript *Script, SCRIPT_EVENT &Event, scriptc
 					m_SkillLevel = 0;
 
 				ALERT(at_console, "%s (base %.2f) - ExpAdj: %.2f NewXP: %.2f %s\n", m_DisplayName.c_str(), atof(GetFirstScriptVar("NPC_ORIG_EXP")), atof(Params[0]), m_SkillLevel, (Params.size() >= 3) ? Params[2].c_str() : " ");
+				MS_DEBUG("EXP: %s (base %.2f) - ExpAdj: %.2f NewXP: %.2f %s", m_DisplayName.c_str(), atof(GetFirstScriptVar("NPC_ORIG_EXP")), atof(Params[0]), m_SkillLevel, (Params.size() >= 3) ? Params[2].c_str() : " ");
 			}
 			else
-				MSErrorConsoleText("CGenericItem::ExecuteScriptCmd", UTIL_VarArgs("Script: %s, %s - initial XP not set, ignoring\n", Script->m.ScriptFile.c_str(), Cmd.Name().c_str()));
+				MS_ERROR("CGenericItem::ExecuteScriptCmd: Script: %s, %s - initial XP not set, ignoring", Script->m.ScriptFile.c_str(), Cmd.Name().c_str());
 		}
 		else
 			ERROR_MISSING_PARMS;
@@ -783,12 +782,10 @@ bool CMSMonster::Script_ExecuteCmd(CScript *Script, SCRIPT_EVENT &Event, scriptc
 				iBundleAmt = atoi(Params[5]);
 
 			msstring StoreDbg = msstring("addstoreitem: ") + StoreName + " " + ItemName + " - ";
-			dbg(StoreDbg + (int)100);
 			CStore *NewStore = CStore::GetStoreByName(StoreName);
 
 			if (NewStore)
 			{
-				dbg(StoreDbg + (int)200);
 				// MiB MAR2019_13 - Clean up of "temporary items" in favor of global table
 				CGenericItem* pItem = CGenericItemMgr::GetGlobalGenericItemByName(ItemName, true);
 				if (pItem)
@@ -805,19 +802,16 @@ bool CMSMonster::Script_ExecuteCmd(CScript *Script, SCRIPT_EVENT &Event, scriptc
 							iRealCost = int(pItem->m_Value * MaxPercent);
 					}
 
-					dbg(StoreDbg + (int)900);
 					if (FBitSet(pItem->MSProperties(), ITEM_GROUPABLE) && !iBundleAmt)
 						iBundleAmt = pItem->iMaxGroupable;
 
 					// MiB MAR2019_13 - Clean up of "temporary items" in favor of global table (lines commented out as part of effort)
-					//dbg( StoreDbg + (int)1000 );
 					//pItem->SUB_Remove( ); //MIB MAR2019_12
 
-					dbg(StoreDbg + (int)2000);
 					NewStore->AddItem(ItemName, iQuantity, iRealCost, flSellRatio, iBundleAmt);
 				}
 				else
-					MSErrorConsoleText("CMSMonster::Script_ExecuteCmd()", UTIL_VarArgs("Script: %s, %s: non-existant item %s!\n", Script->m.ScriptFile.c_str(), Cmd.Name().c_str(), ItemName));
+					MS_ERROR("CMSMonster::Script_ExecuteCmd() Script: %s, %s: non-existant item %s!", Script->m.ScriptFile.c_str(), Cmd.Name().c_str(), ItemName);
 			}
 
 			//Print( "Stores: %i\n", CStore::m_gStores.size() );
@@ -1335,7 +1329,7 @@ bool CMSMonster::Script_ExecuteCmd(CScript *Script, SCRIPT_EVENT &Event, scriptc
 						}
 					}
 					else
-						MSErrorConsoleText("CMSMonster::Script_ExecuteCmd()", UTIL_VarArgs("Script: %s, %s: stat %s not found!\n", Script->m.ScriptFile.c_str(), Cmd.Name().c_str(), Params[0].c_str()));
+						MS_ERROR("CMSMonster::Script_ExecuteCmd(): Script: %s, %s: stat %s not found!", Script->m.ScriptFile.c_str(), Cmd.Name().c_str(), Params[0].c_str());
 				}
 				else
 				{
@@ -1405,7 +1399,7 @@ bool CMSMonster::Script_ExecuteCmd(CScript *Script, SCRIPT_EVENT &Event, scriptc
 				//openaccount storagename target cb_prefix
 				if (Params[0] == "openaccount")
 				{
-					msstring Callback = Params.size() >= 4 ? Params[3] : "game_openaccount";
+					msstring Callback = Params.size() >= 4 ? Params[3].str() : "game_openaccount";
 
 					if (pPlayer->Storage_GetStorage(StorageName))
 						CallScriptEvent(Callback + "_exists");
@@ -1423,7 +1417,7 @@ bool CMSMonster::Script_ExecuteCmd(CScript *Script, SCRIPT_EVENT &Event, scriptc
 				//checkaccount storagename target cb_prefix
 				else if (Params[0] == "checkaccount")
 				{
-					msstring Callback = Params.size() >= 4 ? Params[3] : "game_checkaccount";
+					msstring Callback = Params.size() >= 4 ? Params[3].c_str() : "game_checkaccount";
 
 					if (pPlayer->Storage_GetStorage(StorageName))
 						CallScriptEvent(Callback + "_success");
@@ -1435,7 +1429,7 @@ bool CMSMonster::Script_ExecuteCmd(CScript *Script, SCRIPT_EVENT &Event, scriptc
 				{
 					if (Params.size() >= 5)
 					{
-						msstring Callback = Params.size() >= 6 ? Params[5] : "game_storage_trade";
+						msstring Callback = Params.size() >= 6 ? Params[5].c_str() : "game_storage_trade";
 
 						if (pPlayer->Storage_GetStorage(StorageName))
 						{
@@ -1742,11 +1736,11 @@ bool CMSMonster::Script_ExecuteCmd(CScript *Script, SCRIPT_EVENT &Event, scriptc
 		else
 			ERROR_MISSING_PARMS;
 	}
-	enddbg;
-
 #endif
+
 	return false;
 }
+
 bool CMSMonster::GetScriptVar(msstring &ParserName, msstringlist &Params, CScript *BaseScript, msstring &Return)
 {
 #ifdef VALVE_DLL

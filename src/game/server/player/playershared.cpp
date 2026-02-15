@@ -13,7 +13,7 @@
 #include "mscharacter.h"
 #include "script.h"
 #include "modeldefs.h"
-#include "logger.h"
+#include "mslogger.h"
 
 #ifndef VALVE_DLL
 void ContainerWindowUpdate();
@@ -30,22 +30,6 @@ void ShowWeaponDesc(CGenericItem* pItem);
 //NOTENOTE: remove this when char corruption bug is fixed - Solokiller 5/10/2017
 #include "game.h"
 //END NOTE
-
-const char* ModelListHumanMale[HUMAN_BODYPARTS] =
-{
-	MODEL_HUMAN_LEGS,
-	MODEL_HUMAN_HEAD,
-	MODEL_HUMAN_CHEST,
-	MODEL_HUMAN_ARMS,
-};
-
-const char* ModelListHumanFemale[HUMAN_BODYPARTS] =
-{
-	MODEL_HUMAN_FEM_LEGS,
-	MODEL_HUMAN_FEM_HEAD,
-	MODEL_HUMAN_FEM_CHEST,
-	MODEL_HUMAN_FEM_ARMS,
-};
 
 keysnapshot KeyHistory[MAX_KEYHISTORY];
 
@@ -243,8 +227,6 @@ void CBasePlayer::DeleteStats()
 //Called once on startup on both client & server
 void CBasePlayer::InitialSpawn(void)
 {
-	startdbg;
-
 	if (m_Initialized)
 		return;
 
@@ -259,20 +241,17 @@ void CBasePlayer::InitialSpawn(void)
 	for (int i = 0; i < MAX_CHARSLOTS; i++)
 		m_CharInfo[i].Index = i;
 
-	dbg("Call CreateStats");
 	CreateStats();
 
-	dbg("Call Script Spawn");
 
 	//Load the script file and precache all models/sounds it uses
 #ifdef VALVE_DLL
 	bool fScriptSpawned = Script_Add(PLAYER_SCRIPT, this) ? true : false;
 
 	if (!fScriptSpawned)
-		MSErrorConsoleText("CBasePlayer::InitialSpawn()", msstring("Missing ") + PLAYER_SCRIPT);
+		MS_ERROR("CBasePlayer::InitialSpawn(): Missing %s", PLAYER_SCRIPT);
 
 	//Add all the player-initiated effects.  Such as sit, lay down, emotes, etc.
-	dbg("Add default effects to player");
 
 	/*
 		//Thothie MAR2012 debuggary
@@ -302,14 +281,12 @@ void CBasePlayer::InitialSpawn(void)
 
 	CallScriptEvent("game_reset_wear_positions"); //Initialize the wearable positions, in case the player makes a new char
 	m_Initialized = true;
-
-	enddbg;
 }
+
 /*
   PlaySound - Save yourself a couple parameters by using this instead of EMIT_SOUND.
-  ���������   It also allows translation to the female versions of the sound
+  (c)(c)(c)(c)(c)(c)(c)(c)(c)   It also allows translation to the female versions of the sound
 */
-
 void CBasePlayer::PlaySound(int channel, const char* sample, float volume, bool fGenderSpecific, float attenuation)
 {
 	char SoundName[128];
@@ -522,7 +499,7 @@ bool CBasePlayer::CanHold(CGenericItem* pItem, bool bVerbose, char* pszErrorStri
 
 	int TotalItems = NumItems(); //Gear.size() - 1;
 	int MaxItems = NUM_MAX_ITEMS;
-	int WarnItems = NUM_MAX_ITEMS - 15;
+	int WarnItems = NUM_MAX_ITEMS - 5;
 	/*
 	 for (int i = 0; i < Gear.size(); i++)
 	{
@@ -538,13 +515,14 @@ bool CBasePlayer::CanHold(CGenericItem* pItem, bool bVerbose, char* pszErrorStri
 	ClientPrint(this->pev, at_console, UTIL_VarArgs("Item_Count: %i/%i Weight: %ilbs/%i\n", TotalItems, MaxItems, outWeight, outMaxWeight));
 	if (TotalItems < MaxItems)
 	{
-		if (TotalItems > WarnItems)
-			SendEventMsg(HUDEVENT_UNABLE, UTIL_VarArgs("Warning: you are carrying too many items! (%i/%i)\nToo many items can result in character corruption!", TotalItems, MaxItems));
+		if (TotalItems >= WarnItems)
+			SendEventMsg(HUDEVENT_UNABLE, UTIL_VarArgs("Warning: you are carrying too many items! (%i/%i)", TotalItems, MaxItems));
 	}
+
 	if (TotalItems >= MaxItems)
 	{
 		if (bVerbose)
-			strncpy(cErrorString, "You are carrying too many items.", sizeof(cErrorString));
+			_snprintf(cErrorString, sizeof(cErrorString), "You are carrying too many items! (%i/%i)", TotalItems, MaxItems);
 		pItem->pev->origin = pev->origin;
 		Success = false;
 	}
@@ -556,7 +534,7 @@ bool CBasePlayer::CanHold(CGenericItem* pItem, bool bVerbose, char* pszErrorStri
 		if( bVerbose ) sprintf( cErrorString, "The %s is too big for you to carry.", pItem->DisplayName() );
 		Success = false;
 	}*/
-	if (pItem->Weight() + Weight() > Volume())
+	if (pItem->Weight() + outWeight > outMaxWeight)
 	{
 		if (bVerbose)
 			_snprintf(cErrorString, sizeof(cErrorString), "The %s would make your equipment too heavy!", pItem->DisplayName());
@@ -604,7 +582,7 @@ bool CBasePlayer::CanHold(CGenericItem* pItem, bool bVerbose, char* pszErrorStri
 
 //
 // SwitchItem - Specify an Item and this function finds a free hand,
-// ����������   places it in that hand, and uses it
+// (c)(c)(c)(c)(c)(c)(c)(c)(c)(c)   places it in that hand, and uses it
 
 /*int CBasePlayer :: SwitchItem( CGenericItem *pItem, int iHand, bool bVerbose )
 {
@@ -623,7 +601,7 @@ bool CBasePlayer::CanHold(CGenericItem* pItem, bool bVerbose, char* pszErrorStri
 }*/
 /*
 	RemovePlayerItem - Removes an item from the player's hands or packlist.
-	����������������   Set bCallItemDropFunc to TRUE if you want to call
+	(c)(c)(c)(c)(c)(c)(c)(c)(c)(c)(c)(c)(c)(c)(c)(c)   Set bCallItemDropFunc to TRUE if you want to call
 					   pItem->Drop which completely disassociates the item
 					   from its owner.  Set to FALSE if you're just removing
 					   it from the player's hands (to wear it or something)
@@ -725,8 +703,6 @@ bool CBasePlayer::PutInAnyPack(CGenericItem* pItem, bool bVerbose)
 
 bool CBasePlayer::UseItem(int iHand, bool bVerbose)
 {
-	startdbg;
-
 	//bVerbose == true print all failure messages
 	int iUseHand = 0;
 
@@ -745,7 +721,7 @@ bool CBasePlayer::UseItem(int iHand, bool bVerbose)
 		iUseHand = m_PrefHand;
 	}
 
-	/*dbg( "Remove weapon from sheath" );
+	/*
 	if( DrawWeapon )
 	{
 		//Try to find a weapon to pull out from a sheath
@@ -783,7 +759,6 @@ bool CBasePlayer::UseItem(int iHand, bool bVerbose)
 
 	CGenericItem* pUse = Hand(iUseHand);
 
-	dbg("Call UseItem");
 	if (pUse && !pUse->UseItem(bVerbose))
 	{
 		//if( bVerbose ) SendInfoMsg( "You cannot use %s\n", SPEECH_GetItemName( Hand[iUseHand] ) );
@@ -792,8 +767,6 @@ bool CBasePlayer::UseItem(int iHand, bool bVerbose)
 
 	if (pUse && pUse->SpellData)
 		SendEventMsg(HUDEVENT_NORMAL, msstring("The ") + SPEECH_GetItemName(pUse) + " spell is canceled");
-
-	enddbg;
 
 	return true;
 }
@@ -973,7 +946,7 @@ bool CBasePlayer::DropItem(CGenericItem* pDropItem, bool ForceDrop, bool Verbose
 	else
 	{
 		//Should never get here
-		MSErrorConsoleText("CBasePlayer::DropItem()", "Called Dropitem on client without ForceDrop!");
+		MS_ERROR("CBasePlayer::DropItem() Called Dropitem on client without ForceDrop!");
 		RemoveItem(pDropItem);
 		pDropItem->SUB_Remove();
 	}
@@ -1560,7 +1533,7 @@ charinfo_t::~charinfo_t()
 	Destroy();
 }
 
-char* GetOtherPlayerTransition(CBasePlayer* pPlayer)
+const char* GetOtherPlayerTransition(CBasePlayer* pPlayer)
 {
 #ifdef VALVE_DLL
 	for (int i = 1; i <= gpGlobals->maxClients; i++)

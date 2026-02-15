@@ -13,15 +13,8 @@
 
 #include "inc_weapondefs.h"
 #include "vgui_menudefsshared.h"
-#include "logger.h"
 
 //#define LOG_EXTRA
-
-#ifdef LOG_EXTRA
-#define logfileopt logfile
-#else
-#define logfileopt NullFile
-#endif
 
 #ifndef VALVE_DLL
 void ShowVGUIMenu(int iMenu);
@@ -334,13 +327,10 @@ int CGenericItem::Container_AddItem(CGenericItem *pItem)
 	if (!Container_CanAcceptItem(pItem))
 		return 0;
 
-	startdbg;
-
 	/*
 	//Thothie MAR2010_15 - trying to restore stackable stacks sans char corruption
 	if ( FBitSet( pItem->Properties, ITEM_GROUPABLE ) )
 	{
-		dbg("Stack Attempt");
 		CBasePlayer	*pOwner = (CBasePlayer *)m_pOwner;
 		if ( pOwner )
 		{
@@ -364,7 +354,6 @@ int CGenericItem::Container_AddItem(CGenericItem *pItem)
 			}
 		}
 	}
-	dbg("Post Stack Attempt");
 	*/
 
 	PackData->ItemList.AddItem(pItem);
@@ -386,8 +375,6 @@ int CGenericItem::Container_AddItem(CGenericItem *pItem)
 	//	Params.add( EntToString(pItem) );
 	//endif
 	//CallScriptEvent( "game_container_addeditem", &Params );
-
-	enddbg;
 
 	return 1;
 }
@@ -457,6 +444,7 @@ bool CGenericItem::Container_RemoveItem(CGenericItem *pItem)
 	//pItem->CallScriptEvent( "game_removefrompack" );
 	return true;
 }
+
 //Remove and destroy all items in the container
 void CGenericItem::Container_RemoveAllItems()
 {
@@ -470,6 +458,7 @@ void CGenericItem::Container_RemoveAllItems()
 		pItem->SUB_Remove();
 	}
 }
+
 //Dallocate memory the container is using
 void CGenericItem::Container_Deactivate()
 {
@@ -509,28 +498,25 @@ void CGenericItem::Container_StackItems()
 						if (!FBitSet(pCur->Properties, ITEM_GROUPABLE)) //If it's groupable (Paranoia)
 							continue;
 
-						//if (pCur->iQuantity == 0)
-						//{
-						//	//PackData->ItemList.RemoveItem( pCur );
-						//	Container_RemoveItem(pCur);
-						//	pCur->RemoveFromOwner();
-						//	continue;
-						//}
+						if (pItem->iQuantity != NUM_MAX_STACK)
+						{
+							pItem->iQuantity += pCur->iQuantity;
+							if (pItem->iQuantity > NUM_MAX_STACK)
+							{
+								int remainder = pItem->iQuantity - NUM_MAX_STACK;
+								pCur->iQuantity = remainder;
+								pItem->iQuantity = NUM_MAX_STACK;
+							}
+							else
+							{
+								pCur->iQuantity = 0;
+								Container_RemoveItem(pCur);
+								pCur->RemoveFromOwner();
+								pCur->DelayedRemove();
+							}
+						}
 
-						//Thothie FEB2010_13 - MiB says try this other way around
-						pItem->iQuantity += pCur->iQuantity;
-						if (pItem->iQuantity > 1500)
-							pItem->iQuantity = 1500; //Thothie FEB2011_22 - cap stax at 1500
-
-						//PackData->ItemList.RemoveItem( pCur );
-						pCur->iQuantity = 0;
-						Container_RemoveItem(pCur);
-						pCur->RemoveFromOwner();
-						pCur->DelayedRemove();
 						Container_SendItem(pItem, true);
-						//pCur->iQuantity += pItem->iQuantity;
-						//Container_SendItem( pCur , true );
-						//PackData->ItemList.RemoveItem( pItem );
 					}
 				}
 			}

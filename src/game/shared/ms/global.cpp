@@ -6,7 +6,7 @@
 #include "script.h"
 #include "titles.h"
 #include "scriptedeffects.h"
-#include "logger.h"
+#include "mslogger.h"
 #ifndef VALVE_DLL
 #include "hud.h"
 #include "cl_util.h"
@@ -16,6 +16,7 @@
 #include "clglobal.h"
 #else
 #include "global.h"
+#include "angelscript/CAngelScriptManager.h"
 #endif
 
 #ifndef _WIN32
@@ -80,8 +81,6 @@ msstringlist vote_t::VotesTypesAllowed; //All The vote types allowed
 //The server calls this every map change, at CWorld::Precache
 void MSGlobalItemInit()
 {
-	startdbg;
-	dbg("Begin");
 	MSGlobals::InPrecache = true;
 
 	//Delete the previous titles
@@ -109,18 +108,16 @@ void MSGlobalItemInit()
 	vote_t::VotesTypes.add("advtime");
 
 	MSGlobals::InPrecache = false;
-
-	enddbg;
 }
 
 //Called on client & server when a new map is loaded
 void MSGlobals::NewMap()
 {
-	Log("[NewMap]: %s", MSGlobals::MapName.c_str());
+	MS_INFO("[NewMap]: Allocating new map objects.");
 	if (MSGlobals::GameScript)
 	{
 		//GameScript should have been deleted by EndMap() before NewMap() is called
-		MSErrorConsoleText("MSGlobals::NewMap", "MSGlobals::GameScript already allocated!");
+		MS_ERROR("MSGlobals::NewMap MSGlobals::GameScript already allocated!");
 	}
 	
 #if SPAWN_GLOBAL_ITEMS
@@ -151,6 +148,23 @@ void MSGlobals::NewMap()
 
 		MSGlobals::GameScript->CallScriptEvent("game_precache");
 		MSGlobals::GameScript->CallScriptEvent("game_spawn");
+		
+		// Call AngelScript game_spawn function
+#ifdef VALVE_DLL
+		CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
+		if (pASManager && pASManager->IsInitialized())
+		{
+			MS_INFO("Calling AngelScript game_spawn...");
+			if (pASManager->CallGlobalFunction("game_spawn"))
+			{
+				MS_INFO("AngelScript game_spawn completed successfully");
+			}
+			else
+			{
+				MS_WARN("AngelScript game_spawn failed or not found");
+			}
+		}
+#endif
 	}
 }
 
@@ -184,15 +198,10 @@ void MSGlobals::EndMap()
 
 void MSGlobals::SharedThink()
 {
-	startdbg;
-
-	dbg("Call MSGlobals->GameScript->Think");
 	if (MSGlobals::GameScript)
 		MSGlobals::GameScript->RunScriptEvents(false);
 
 	MemMgr::Think();
-
-	enddbg;
 }
 
 //Called on client & server when the dll is loaded
@@ -200,7 +209,7 @@ void MSGlobals::DLLAttach(HINSTANCE hinstDLL)
 {
 #ifdef _WIN32
 	msstring DllFileName;
-	GetModuleFileName(hinstDLL, DllFileName.c_str(), MSSTRING_SIZE);
+	GetModuleFileName(hinstDLL, DllFileName.str(), MSSTRING_SIZE);
 
 	// Remove cl_dlls or dlls (plus slash) from the path!
 #ifdef VALVE_DLL
@@ -227,7 +236,15 @@ void MSGlobals::DLLAttach(HINSTANCE hinstDLL)
 	AbsGamePath = msstring(szTempPath) + msstring("/msr");
 #endif
 
-	OpenLogFiles();
+	// Initialize MSLogger first
+#ifdef VALVE_DLL
+	MSLogger::Initialize(AbsGamePath.c_str(), true);
+#else
+	MSLogger::Initialize(AbsGamePath.c_str(), false);
+#endif
+
+	MS_INFO("Master Sword Rebirth logging system initialized");
+	MS_INFO("Game path: %s", AbsGamePath.c_str());
 }
 
 //Called on client & server when the dll is unloaded
@@ -303,25 +320,25 @@ genericitem_full_t::operator class CGenericItem *()
 }
 
 const char *g_EntTypeByName[ENT_TYPE_TOTAL] =
-	{
-		"ent_lastseen",
-		"ent_lastheard",
-		"ent_lastspoke",
-		"ent_lastoffered",
-		"ent_lastgave",
-		"ent_laststole",
-		"ent_lastused",
-		"ent_laststruck",
-		"ent_laststruckbyme",
-		"ent_lastprojectile",
-		"ent_lastcreated",
-		"ent_me",
-		"ent_owner",
-		"ent_creationowner",
-		"ent_target",
-		"ent_expowner",
-		"ent_localplayer",
-		"ent_currentplayer",
+{
+	"ent_lastseen",
+	"ent_lastheard",
+	"ent_lastspoke",
+	"ent_lastoffered",
+	"ent_lastgave",
+	"ent_laststole",
+	"ent_lastused",
+	"ent_laststruck",
+	"ent_laststruckbyme",
+	"ent_lastprojectile",
+	"ent_lastcreated",
+	"ent_me",
+	"ent_owner",
+	"ent_creationowner",
+	"ent_target",
+	"ent_expowner",
+	"ent_localplayer",
+	"ent_currentplayer",
 };
 int EntityNameToType(const char *pszName)
 {
@@ -421,8 +438,6 @@ static msstringlist Parameters; //made static, for speed
 
 void CScriptedEnt::Spawn()
 {
-	startdbg;
-	dbg("Begin");
 	StoreEntity(this, ENT_ME);
 	m_HandleThink = true;
 
@@ -430,18 +445,12 @@ void CScriptedEnt::Spawn()
 	CBaseEntity::Spawn();
 	if (!pEdict->free)
 	{
-		dbg("Call game_spawn");
 		CallScriptEvent("spawn");	   //old
 		CallScriptEvent("game_spawn"); //not called by players (dunno about monsters)
 	}
-
-	enddbg;
 }
 void CScriptedEnt::Think()
 {
-	startdbg;
-	dbg("CScriptedEnt::Think - Begin");
-
 	edict_t *pEdict = edict();
 	CBaseEntity::Think();
 
@@ -454,8 +463,6 @@ void CScriptedEnt::Think()
 		return;
 
 	CallScriptEvent("game_think");
-
-	enddbg;
 }
 
 void CScriptedEnt::Touch(CBaseEntity *pOther)
@@ -487,9 +494,6 @@ void CScriptedEnt::Blocked(CBaseEntity *pOther)
 }
 void CScriptedEnt::Use(CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value)
 {
-	startdbg;
-	dbg("Begin");
-
 	if (m_pfnUse)
 		(this->*m_pfnUse)(pActivator, pCaller, useType, value);
 
@@ -499,13 +503,9 @@ void CScriptedEnt::Use(CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE u
 	Parameters.add(UTIL_VarArgs("%i", useType));
 	Parameters.add(UTIL_VarArgs("%f", value));
 	CallScriptEvent("game_used", &Parameters);
-	enddbg;
 }
 void CScriptedEnt::KeyValue(KeyValueData *pkvd)
 {
-	startdbg;
-	dbg("Begin");
-
 	if (!pkvd->fHandled && !strcmp(pkvd->szKeyName, "scriptname"))
 	{
 		Script_Add(pkvd->szValue, this);
@@ -514,19 +514,14 @@ void CScriptedEnt::KeyValue(KeyValueData *pkvd)
 	}
 	else
 		pkvd->fHandled = FALSE;
-
-	enddbg;
 }
+
 void CScriptedEnt::Deactivate()
 {
-	startdbg;
-	dbg("CScriptedEnt::Deactivate - Begin");
-
 	CBaseEntity::Deactivate();
 	IScripted::Deactivate();
-
-	enddbg;
 }
+
 /*
 ======================
 AlertMessage
@@ -546,53 +541,16 @@ void Print(const char *szFmt, ...)
 	ALERT(at_console, "%s", string);
 }
 
-void Log(const char *szFmt, ...)
-{
-	if (!logfile.is_open())
-		return;
-
-	static char string[1024];
-
-	va_list argptr;	
-	va_start(argptr, szFmt);
-	vsnprintf(string, sizeof(string), szFmt, argptr);
-	va_end(argptr);
-
-	logfile << string << "\n";
-}
-
-void LogExtensive(const char* Text)
-{
-#ifdef EXTENSIVE_LOGGING
-	LogCurrentLine(Text);
-#endif
-}
-
-void DbgLog(char *szFmt, ...)
-{
-#ifdef EXTENSIVE_LOGGING
-	if (!logfile.is_open())
-		return;
-
-	static char string[1024];
-
-	va_list argptr;	
-	va_start(argptr, szFmt);
-	vsnprintf(string, sizeof(string), szFmt, argptr);
-	va_end(argptr);
-
-	logfile << string << "\n";
-#endif
-}
-
 const char* EngineFunc::GetString(int string)
 {
 	return STRING(string);
 }
+
 int EngineFunc::AllocString(const char* String)
 {
 	return ALLOC_STRING(String);
 }
+
 void EngineFunc::MakeVectors(const Vector &vecAngles, float *p_vForward, float *p_vRight, float *p_vUp)
 {
 #ifdef VALVE_DLL
@@ -601,14 +559,17 @@ void EngineFunc::MakeVectors(const Vector &vecAngles, float *p_vForward, float *
 	AngleVectors(vecAngles, p_vForward, p_vRight, p_vUp);
 #endif
 }
+
 float EngineFunc::CVAR_GetFloat(const char* Cvar)
 {
 	return CVAR_GET_FLOAT(Cvar);
 }
+
 const char* EngineFunc::CVAR_GetString(const char* Cvar)
 {
 	return CVAR_GET_STRING(Cvar);
 }
+
 #ifndef VALVE_DLL
 cvar_s *EngineFunc::CVAR_Create(const char* Cvar, const char* Value, const int Flags)
 {
@@ -738,6 +699,7 @@ float EngineFunc::Shared_GetWaterHeight(const Vector &Origin, float minz, float 
 
 	return midUp.z;
 }
+
 float EngineFunc::AngleDiff(float destAngle, float srcAngle)
 {
 	float delta;
@@ -755,6 +717,7 @@ float EngineFunc::AngleDiff(float destAngle, float srcAngle)
 	}
 	return delta;
 }
+
 //Play sound independent of an entity
 void EngineFunc::Shared_PlaySound3D(const char* Sound, float Volume, const Vector &Origin, float Attn)
 {
@@ -836,13 +799,6 @@ bool FindSkyHeight(Vector Origin, float &SkyHeight)
 
 	return false;
 }
-
-/*int	MSAllocateModel( char *pszModel )
-{
-	int idx = g_engfuncs.pfnPrecacheModel( pszModel );
-	logfile << "Loaded Model #" << idx << " (" << pszModel << ")" << endl;
-	return idx;
-}*/
 
 bool g_MemWarningActive = false;
 int MemMgr::m_TotalAllocations = 0;

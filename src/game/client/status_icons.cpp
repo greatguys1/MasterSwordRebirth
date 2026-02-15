@@ -15,13 +15,13 @@
 //
 // status_icons.cpp
 //
+#include <string.h>
+#include <stdio.h>
 #include "hud.h"
 #include "cl_util.h"
 #include "const.h"
 #include "entity_state.h"
 #include "cl_entity.h"
-#include <string.h>
-#include <stdio.h>
 #include "parsemsg.h"
 #include "event_api.h"
 
@@ -40,7 +40,6 @@ int CHudStatusIcons::Init(void)
 
 int CHudStatusIcons::VidInit(void)
 {
-
 	return 1;
 }
 
@@ -84,7 +83,7 @@ int CHudStatusIcons::MsgFunc_StatusIcon(const char *pszName, int iSize, void *pb
 	BEGIN_READ(pbuf, iSize);
 
 	int ShouldEnable = READ_BYTE();
-	char *pszIconName = READ_STRING();
+	const char *pszIconName = READ_STRING();
 	if (ShouldEnable)
 	{
 		int r = READ_BYTE();
@@ -102,7 +101,7 @@ int CHudStatusIcons::MsgFunc_StatusIcon(const char *pszName, int iSize, void *pb
 }
 
 // add the icon to the icon list, and set it's drawing color
-void CHudStatusIcons::EnableIcon(char *pszIconName, unsigned char red, unsigned char green, unsigned char blue)
+void CHudStatusIcons::EnableIcon(const char *pszIconName, unsigned char red, unsigned char green, unsigned char blue)
 {
 	int i = 0;
 
@@ -147,7 +146,7 @@ void CHudStatusIcons::EnableIcon(char *pszIconName, unsigned char red, unsigned 
 	}
 }
 
-void CHudStatusIcons::DisableIcon(char *pszIconName)
+void CHudStatusIcons::DisableIcon(const char *pszIconName)
 {
 	// find the sprite is in the current list
 	for (int i = 0; i < MAX_ICONSPRITES; i++)

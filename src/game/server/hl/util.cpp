@@ -32,7 +32,6 @@
 #include "weapons.h"
 #include "gamerules.h"
 
-#include "logger.h"
 /*
 =====================
 UTIL_WeaponTimeBase
@@ -408,9 +407,6 @@ void UTIL_MoveToOrigin(edict_t *pent, const Vector &vecGoal, float flDist, int i
 
 int UTIL_EntitiesInBox(CBaseEntity **pList, int listMax, const Vector &mins, const Vector &maxs, int flagMask, int startIndex)
 {
-	//startdbg;
-
-	//dbg("Recursion check"); //temporary
 	if (startIndex >= gpGlobals->maxEntities) //End recursion if you have no more entities to search (shouldn't happen anyway) MiB Feb2008a
 		return 0;
 
@@ -443,7 +439,6 @@ int UTIL_EntitiesInBox(CBaseEntity **pList, int listMax, const Vector &mins, con
 			maxs.z < pEdict->v.absmin.z)
 			continue;
 
-		//dbg("Sigh"); //temporary
 		pEntity = CBaseEntity::Instance(pEdict);
 		if (!pEntity)
 			continue;
@@ -456,10 +451,6 @@ int UTIL_EntitiesInBox(CBaseEntity **pList, int listMax, const Vector &mins, con
 	}
 
 	return count;
-
-	//enddbg; //temporary
-
-	//return -1; //temporary
 }
 
 int UTIL_MonstersInSphere(CBaseEntity **pList, int listMax, const Vector &center, float radius, int startIndex)
@@ -675,7 +666,7 @@ void UTIL_DoTokenScriptEvent(const char *tokenevents, CBaseEntity *pTarget)
 	msstring m_scriptevent = tokenevents;
 	if (m_scriptevent.starts_with("gm_"))
 	{
-		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 		IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 		if (pGMScript)
 		{
@@ -757,7 +748,7 @@ float UTIL_StringToSecs(const char *timein)
 //NOV2014_16 Thothie - simplfying code side array management (retrieval)
 //Util_ScriptArrayProps(<entity>,<operation:size|exists|getidx>,<array_name>,<idx|0>)
 //returns "noarray" if size or getidx used on non-existent array
-char *Util_ScriptArrayGetProps(CBaseEntity *pEntity, const char *array_operation, const char *array_name, int subIdx)
+const char *Util_ScriptArrayGetProps(CBaseEntity *pEntity, const char *array_operation, const char *array_name, int subIdx)
 {
 	msstring arrNameStr(array_name);
 	msscriptarray* pArray = pEntity->GetScriptedArray(arrNameStr, false);
@@ -1933,7 +1924,7 @@ void UTIL_Remove(CBaseEntity *pEntity)
 	msstring msEntClassName = STRING(pEntity->pev->classname);
 	if (msEntClassName.contains("msarea_monsterspawn") || msEntClassName.contains("ms_monsterspawn"))
 	{
-		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 		IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 		if (pGMScript)
 		{
@@ -1979,7 +1970,7 @@ void UTIL_PrecacheOther(const char *szClassname)
 // UTIL_LogPrintf - Prints a logged message to console.
 // Preceded by LOG: ( timestamp ) < message >
 //=========================================================
-void UTIL_LogPrintf(char *fmt, ...)
+void UTIL_LogPrintf(const char *fmt, ...)
 {
 	static char string[1024];
 

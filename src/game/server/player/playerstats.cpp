@@ -6,18 +6,8 @@
 #include "player.h"
 #include "weapons/weapons.h"
 #include "weapons/genericitem.h"
-#include "logger.h"
 #include "modeldefs.h"
 
-int CBasePlayer::IdealModel()
-{
-	return MAKE_STRING(MODEL_HUMAN_REF);
-	/*if( m_Gender == GENDER_MALE )
-		return MAKE_STRING(MODEL_HUMAN_REF);
-	else return MAKE_STRING(MODEL_HUMAN_REF);*/
-	//return MAKE_STRING(Race->MaleModel);
-	//return MAKE_STRING(Race->FemaleModel);
-}
 Vector CBasePlayer::Size(int flags)
 {
 	return Vector(m_Width, m_Width, (!(flags & FL_DUCKING)) ? m_Height : m_Height / 2);
@@ -128,7 +118,7 @@ std::tuple<bool, int> CBasePlayer::LearnSkill(int iStat, int iStatType, int Enem
 
 		//set debug cvar to avoid spamming console but be able to get debug info
 		char sDebugInfo[64];
-		_snprintf(sDebugInfo, 64, "Stat: %i , Equalcount : %i , Highest EXP needed: %llf", iBestSubstatId, iEqualCount, ldHighestExpRemaining);
+		_snprintf(sDebugInfo, 64, "Stat: %i , Equalcount : %i , Highest EXP needed: %lf", iBestSubstatId, iEqualCount, ldHighestExpRemaining);
 		g_engfuncs.pfnCVarSetString("DEBUG_bestxpstat", sDebugInfo);
 
 		//run learnskill
@@ -145,9 +135,9 @@ std::tuple<bool, int> CBasePlayer::LearnSkill(int iStat, int iStatType, int Enem
 			ALERT(at_console, "Gained XP: %i in skill %s %s \n", EnemySkillLevel, SkillStatList[iStatIdx].Name, SpellTypeList[iBestSubstatId]); //Thothie returns XP gained by monsters
 		else
 			ALERT(at_console, "Gained XP: %i in skill %s %s \n", EnemySkillLevel, SkillStatList[iStatIdx].Name, SkillTypeList[iBestSubstatId]); //Thothie returns XP gained by monsters
+
 		if (std::get<0>(tbiSuccess))
 		{
-			startdbg;
 			hudtextparms_t htp;
 			memset(&htp, 0, sizeof(hudtextparms_t));
 			htp.x = 0.02;
@@ -163,7 +153,6 @@ std::tuple<bool, int> CBasePlayer::LearnSkill(int iStat, int iStatType, int Enem
 			htp.fadeoutTime = 3.0;
 			htp.holdTime = 2.0;
 			htp.fxTime = 0.6;
-			dbg("HudMessage");
 			UTIL_HudMessage(this, htp, UTIL_VarArgs("%s %s +1\n", SkillStatList[iStatIdx].Name, SkillTypeList[iBestSubstatId]));
 
 			if (!is_spell_stat)
@@ -177,20 +166,18 @@ std::tuple<bool, int> CBasePlayer::LearnSkill(int iStat, int iStatType, int Enem
 				UTIL_HudMessage(this, htp, UTIL_VarArgs("%s %s +1\n", SkillStatList[iStatIdx].Name, SpellTypeList[iBestSubstatId]));
 			}
 
-			dbg("game_learnskill");
 			msstringlist Params;
 			Params.add(SkillStatList[iStatIdx].Name);
 			if (!is_spell_stat)
 				Params.add(SkillTypeList[iBestSubstatId]);
 			else
 				Params.add(SpellTypeList[iBestSubstatId]);
+			
 			Params.add(UTIL_VarArgs("%i", GetSkillStat(iStatIdx, iBestSubstatId)));
 			CallScriptEvent("game_learnskill", &Params);
-			enddbg;
 		}
 
 		bSkillLeveled = true;
-
 		iRemainingExp = std::get<1>(tbiSuccess);
 	}
 

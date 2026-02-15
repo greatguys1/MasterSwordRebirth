@@ -15,10 +15,8 @@
 //
 // cl_util.h
 //
-#include "msbasic.h"
 #include "sharedutil.h"
 #include "msdebug.h"
-#include "logger.h"
 
 #include "cvardef.h"
 
@@ -33,11 +31,8 @@
 #define DECLARE_MESSAGE(y, x)                                     \
 	int __MsgFunc_##x(const char *pszName, int iSize, void *pbuf) \
 	{                                                             \
-		DBG_INPUT;                                                \
 		int ret = 0;                                              \
-		startdbg;                                                 \
 		ret = gHUD.y.MsgFunc_##x(pszName, iSize, pbuf);           \
-		enddbg;                                                   \
 		return ret;                                               \
 	}
 
@@ -45,30 +40,21 @@
 #define DECLARE_COMMAND(y, x)   \
 	void __CmdFunc_##x(void)    \
 	{                           \
-		DBG_INPUT;              \
-		startdbg;               \
 		gHUD.y.UserCmd_##x();   \
-		enddbg;                 \
 	}
 
 //------------ Master Sword ----------------
 #define MS_DECLARE_MESSAGE(y, x)                                  \
 	int __MsgFunc_##x(const char *pszName, int iSize, void *pbuf) \
 	{                                                             \
-		DBG_INPUT;                                                \
 		int ret = 0;                                              \
-		startdbg;                                                 \
 		ret = gHUD.y->MsgFunc_##x(pszName, iSize, pbuf);          \
-		enddbg;                                                   \
 		return ret;                                               \
 	}
 #define MS_DECLARE_COMMAND(y, x) \
 	void __CmdFunc_##x(void)     \
 	{                            \
-		DBG_INPUT;               \
-		startdbg;                \
 		gHUD.y->UserCmd_##x();   \
-		enddbg;                  \
 	}
 //------------------------------------------
 
@@ -76,9 +62,9 @@
 #undef CVAR_GET_FLOAT
 #undef CVAR_GET_STRING
 #undef CVAR_CREATE
-inline float CVAR_GET_FLOAT(const char *x) { return gEngfuncs.pfnGetCvarFloat((char *)x); }
-inline char *CVAR_GET_STRING(const char *x) { return gEngfuncs.pfnGetCvarString((char *)x); }
-inline struct cvar_s *CVAR_CREATE(const char *cv, const char *val, const int flags) { return gEngfuncs.pfnRegisterVariable((char *)cv, (char *)val, flags); }
+inline float CVAR_GET_FLOAT(const char *x) { return gEngfuncs.pfnGetCvarFloat(x); }
+inline const char *CVAR_GET_STRING(const char *x) { return gEngfuncs.pfnGetCvarString(x); }
+inline struct cvar_s *CVAR_CREATE(const char *cv, const char *val, const int flags) { return gEngfuncs.pfnRegisterVariable(cv, val, flags); }
 
 #define SPR_Load (*gEngfuncs.pfnSPR_Load)
 #define SPR_Set (*gEngfuncs.pfnSPR_Set)
@@ -160,7 +146,7 @@ inline void CenterPrint(const char *string)
 #define GetPlayerInfo (*gEngfuncs.pfnGetPlayerInfo)
 
 // sound functions
-inline void PlaySound(char *szSound, float vol) { gEngfuncs.pfnPlaySoundByName(szSound, vol); }
+inline void PlaySound(const char *szSound, float vol) { gEngfuncs.pfnPlaySoundByName(szSound, vol); }
 inline void PlaySound(int iSound, float vol) { gEngfuncs.pfnPlaySoundByIndex(iSound, vol); }
 inline void PlayHUDSound(const char *Sound, float vol) { PlaySound((char *)Sound, vol); }
 

@@ -38,11 +38,14 @@
 #include "netadr.h"
 #include "com_model.h"
 
-#include "logger.h"
 #include "svglobals.h"
 #include "mscharacter.h"
 #include "global.h"
 #include "pm_shared.h" // PM_GetHullBounds
+#include "ms/angelscript/ASEngineEventManager.h"
+#include "ms/angelscript/CAngelScriptManager.h"
+#include "ms/angelscript/ASModuleSystem.h"
+#include "mslogger.h"
 
 extern void PlayerPrecache();
 
@@ -65,7 +68,6 @@ void LinkUserMessages(void);
  */
 void set_suicide_frame(entvars_t *pev)
 {
-	startdbg;
 	ALERT(at_console, "SUICIDE FRAME\n");
 	if (!pev->model)
 		return; // allready gibbed
@@ -75,7 +77,6 @@ void set_suicide_frame(entvars_t *pev)
 	pev->movetype = MOVETYPE_TOSS;
 	pev->deadflag = DEAD_DEAD;
 	pev->nextthink = -1;
-	enddbg;
 }
 
 clientaddr_t g_NewClients[32];
@@ -89,11 +90,9 @@ called when a player connects to a server
 */
 BOOL ClientConnect(edict_t *pEntity, const char *pszName, const char *pszAddress, char szRejectReason[128])
 {
-	DBG_INPUT;
 	bool fSuccess = false;
-	startdbg;
 
-	logfile << Logger::LOG_INFO << "[ClientConnect]  ";
+	MS_INFO("[ClientConnect]	");
 	if (g_pGameRules)
 		fSuccess = g_pGameRules->ClientConnected(pEntity, pszName, pszAddress, szRejectReason) ? true : false;
 
@@ -107,14 +106,44 @@ BOOL ClientConnect(edict_t *pEntity, const char *pszName, const char *pszAddress
 		strncpy(ClientInfo.Addr, pszAddress, sizeof(ClientInfo.Addr) );
 		ClientInfo.fDisplayedGreeting = false;
 		pEntity->free = false;
-		logfile << "Client Queue: [" << iPlayerOfs << "] " << pszAddress << "\n";
+		MS_INFO("Client Queue: [%i] %s", iPlayerOfs, pszAddress);
+		
+		// Fire AngelScript engine event for player connection
+		ASEngineEventManager* pEventManager = ASEngineEventManager::Instance();
+		if (pEventManager)
+		{
+			// Extract Steam ID from address if available (format: "SteamID:12345" or just IP)
+			std::string steamID = "Unknown";
+			if (pszAddress && strlen(pszAddress) > 0)
+			{
+				std::string addr(pszAddress);
+				size_t steamPos = addr.find("SteamID:");
+				if (steamPos != std::string::npos)
+				{
+					steamID = addr.substr(steamPos + 8); // Skip "SteamID:"
+				}
+				else
+				{
+					steamID = addr; // Use full address as fallback
+				}
+			}
+			
+			// Log handler count before firing event
+			int handlerCount = pEventManager->GetHandlerCount(EngineEventType::PLAYER_CONNECT);
+			MS_DEBUG("[DEBUG] Firing PlayerConnect event - handlers registered: %i", handlerCount);
+			
+			pEventManager->FirePlayerConnectEvent(pszName ? pszName : "Unknown", steamID.c_str());
+		}
+		else
+		{
+			MS_ERROR("[DEBUG] ASEngineEventManager instance is null during player connect!");
+		}
 	}
 	else
-		logfile << "Client rejected: " << szRejectReason << "\n";
+		MS_INFO("Client Rejected: %s", szRejectReason);
 
-	logfile << Logger::LOG_INFO << "[ClientConnect: Complete]\n";
+	MS_INFO("[ClientConnect: Complete]");
 
-	enddbg;
 	return fSuccess ? 1 : 0;
 }
 
@@ -131,14 +160,8 @@ GLOBALS ASSUMED SET:  g_fGameOver
 
 void ClientDisconnect(edict_t *pEntity)
 {
-	DBG_INPUT;
-	startdbg;
-
-	dbg("Begin");
 	if (g_fGameOver)
 		return;
-
-	dbg("Call pSound->Reset");
 
 	/*CSound *pSound;
 	pSound = CSoundEnt::SoundPointerForIndex( CSoundEnt::ClientSoundIndex( pEntity ) );
@@ -146,13 +169,47 @@ void ClientDisconnect(edict_t *pEntity)
 	if ( pSound )
 		pSound->Reset();*/
 
-	dbg("Call g_pGameRules->ClientDisconnected");
+
+	// Fire AngelScript engine event for player disconnection (before cleanup)
+	ASEngineEventManager* pEventManager = ASEngineEventManager::Instance();
+	if (pEventManager && pEntity)
+	{
+		// Get player information before cleanup
+		const char* pszPlayerName = "Unknown";
+		std::string steamID = "Unknown";
+		
+		// Try to get player name from entity
+		if (pEntity->v.netname && STRING(pEntity->v.netname))
+		{
+			pszPlayerName = STRING(pEntity->v.netname);
+		}
+		
+		// Try to get Steam ID from client info
+		int iPlayerIndex = ENTINDEX(pEntity) - 1;
+		if (iPlayerIndex >= 0 && iPlayerIndex < gpGlobals->maxClients)
+		{
+			clientaddr_t &ClientInfo = g_NewClients[iPlayerIndex];
+			if (ClientInfo.Addr[0])
+			{
+				std::string addr(ClientInfo.Addr);
+				size_t steamPos = addr.find("SteamID:");
+				if (steamPos != std::string::npos)
+				{
+					steamID = addr.substr(steamPos + 8); // Skip "SteamID:"
+				}
+				else
+				{
+					steamID = addr; // Use full address as fallback
+				}
+			}
+		}
+		
+		pEventManager->FirePlayerDisconnectEvent(pszPlayerName, steamID.c_str());
+	}
 
 	//When the server is shutdown, this ClientDisconnect is called after gamerules has been deleted
 	if (g_pGameRules)
 		g_pGameRules->ClientDisconnected(pEntity);
-
-	enddbg;
 }
 
 // called by ClientKill and DeadThink
@@ -173,8 +230,6 @@ GLOBALS ASSUMED SET:  g_ulModelIndexPlayer
 */
 void ClientKill(edict_t *pEntity)
 {
-	startdbg;
-	DBG_INPUT;
 	entvars_t *pev = &pEntity->v;
 
 	CBasePlayer *pPlayer = (CBasePlayer *)CBasePlayer::Instance(pev);
@@ -186,7 +241,6 @@ void ClientKill(edict_t *pEntity)
 		pPlayer->SendInfoMsg("You will die in 5 seconds...\n");
 	pPlayer->m_TimeTillSuicide = gpGlobals->time + (pPlayer->IsElite() ? 0.1f : 5.0f);
 	pPlayer->m_fNextSuicideTime = pPlayer->m_TimeTillSuicide + 5;
-	enddbg;
 }
 
 /*
@@ -198,10 +252,7 @@ called each time a player is spawned
 */
 void ClientPutInServer(edict_t *pEntity)
 {
-	startdbg;
-	DBG_INPUT;
-
-	logfile << Logger::LOG_INFO << "[ClientPutInServer]\n";
+	MS_INFO("[ClientPutInServer]");
 	CBasePlayer *pPlayer;
 
 	entvars_t *pev = &pEntity->v;
@@ -212,17 +263,17 @@ void ClientPutInServer(edict_t *pEntity)
 	if (!pPlayer->m_ClientAddress[0]) //Just joined the server, get address
 	{
 		int iPlayerOfs = ENTINDEX(pEntity) - 1;
-		logfile << Logger::LOG_INFO << "Client Address " << g_NewClients[iPlayerOfs].Addr << "... Slot [" << iPlayerOfs << "]\n";
+		MS_INFO("Client Address %s... Slot %i", g_NewClients[iPlayerOfs].Addr, iPlayerOfs);
 
 		strncpy(pPlayer->m_ClientAddress, g_NewClients[iPlayerOfs].Addr, sizeof(pPlayer->m_ClientAddress));
 	}else{
-		MSErrorConsoleText("ClientPutInServer", "Player already has Address");
+		MS_ERROR("ClientPutInServer Player already has Address");
 	}
 	
 	char msg[256];
 	_snprintf(msg, sizeof(msg), "Connecting %s (%s)\n", pPlayer->DisplayName(), pPlayer->m_ClientAddress);
 	g_engfuncs.pfnServerPrint(msg);
-	logfile << Logger::LOG_INFO << msg;
+	MS_INFO("Connecting %s (%s)", pPlayer->DisplayName(), pPlayer->m_ClientAddress);
 
 	// Read Profile from FN, if possible.
 	pPlayer->steamID64 = UTIL_ComputeSteamID64(GETPLAYERAUTHID(pEntity));
@@ -232,7 +283,6 @@ void ClientPutInServer(edict_t *pEntity)
 
 	// Reset interpolation during first frame
 	pPlayer->pev->effects |= EF_NOINTERP;
-	enddbg;
 }
 
 #include "voice_gamemgr.h"
@@ -366,7 +416,7 @@ void Host_Say(edict_t *pEntity, int teamonly)
 	// echo to server console
 	g_engfuncs.pfnServerPrint(text);
 
-	char *temp;
+	const char *temp;
 	if (teamonly)
 		temp = "say_team";
 	else
@@ -449,6 +499,7 @@ void ClientCommand2(edict_t *pEntity)
 	if (FStrEq(pcmd, "say"))
 	{
 		char *Args = (char *)CMD_ARGS();
+		
 		pPlayer->Speak(Args, (speech_type)pPlayer->m_SayType);
 	}
 	else if (FStrEq(pcmd, "say_text") && !pPlayer->m_Gagged)
@@ -460,7 +511,7 @@ void ClientCommand2(edict_t *pEntity)
 			msstring Text = msstring(Args).find_str(" "); //skip the first parameter
 			Text = Text.substr(1);
 
-			CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+			CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 			IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 			if (pGMScript)
 			{
@@ -470,6 +521,15 @@ void ClientCommand2(edict_t *pEntity)
 				Parameters.add(Text);
 				pGMScript->CallScriptEvent("game_playerspeak", &Parameters);
 			}
+			
+			// Fire the PlayerSayText event to AngelScript
+			ASEngineEventManager* pEventManager = ASEngineEventManager::Instance();
+			if( pEventManager && pPlayer )
+			{
+				const char* pszPlayerName = pPlayer->DisplayName();
+				const char* pszSteamID = GETPLAYERAUTHID( pPlayer->edict() );
+				pEventManager->FirePlayerSayTextEvent(pszPlayerName, pszSteamID, Text.c_str());
+			}
 
 			pPlayer->Speak(Text, (speech_type)SayType);
 		}
@@ -477,6 +537,113 @@ void ClientCommand2(edict_t *pEntity)
 	else if (FStrEq(pcmd, "setsay"))
 	{
 		pPlayer->m_SayType = atoi(CMD_ARGV(1));
+	}
+	else if (FStrEq(pcmd, "as_test"))
+	{
+		// Test AngelScript LogMessage and event system
+		ALERT(at_console, "[AS_TEST] Testing AngelScript functions...\n");
+		
+		// Test calling the TestLogMessage function
+		CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
+		if (pASManager && pASManager->IsInitialized())
+		{
+			ALERT(at_console, "[AS_TEST] Calling TestLogMessage function...\n");
+			bool result = pASManager->CallGlobalFunction("TestLogMessage", "GameMaster");
+			ALERT(at_console, "[AS_TEST] TestLogMessage result: %s\n", result ? "SUCCESS" : "FAILED");
+			
+			// Also test a simple function
+			ALERT(at_console, "[AS_TEST] Calling TestSimpleFunction...\n");
+			result = pASManager->CallGlobalFunction("TestSimpleFunction", "GameMaster");
+			ALERT(at_console, "[AS_TEST] TestSimpleFunction result: %s\n", result ? "SUCCESS" : "FAILED");
+		}
+		else
+		{
+			ALERT(at_console, "[AS_TEST] AngelScript manager not initialized!\n");
+		}
+	}
+	else if (FStrEq(pcmd, "as_fire_event"))
+	{
+		// Manually fire a test event
+		ASEngineEventManager* pEventManager = ASEngineEventManager::Instance();
+		if (pEventManager)
+		{
+			const char* eventType = CMD_ARGC() > 1 ? CMD_ARGV(1) : "connect";
+			
+			if (FStrEq(eventType, "connect"))
+			{
+				ALERT(at_console, "[AS_FIRE_EVENT] Firing PlayerConnect event...\n");
+				pEventManager->FirePlayerConnectEvent("TestPlayer", "STEAM_TEST_12345");
+			}
+			else if (FStrEq(eventType, "disconnect"))
+			{
+				ALERT(at_console, "[AS_FIRE_EVENT] Firing PlayerDisconnect event...\n");
+				pEventManager->FirePlayerDisconnectEvent("TestPlayer", "STEAM_TEST_12345");
+			}
+			else if (FStrEq(eventType, "monster"))
+			{
+				ALERT(at_console, "[AS_FIRE_EVENT] Firing MonsterKilled event...\n");
+				pEventManager->FireMonsterKilledEvent("TestMonster", "TestKiller", 100.0f, 200.0f, 50.0f);
+			}
+			else
+			{
+				ALERT(at_console, "[AS_FIRE_EVENT] Unknown event type. Use: connect, disconnect, or monster\n");
+			}
+		}
+		else
+		{
+			ALERT(at_console, "[AS_FIRE_EVENT] Event manager not initialized!\n");
+		}
+	}
+	else if (FStrEq(pcmd, "as_reload_scripts"))
+	{
+		// Developer-only console command for AngelScript hot-reload
+		ALERT(at_console, "[AS_RELOAD_SCRIPTS] Script reload console command executed by %s\n", pPlayer->DisplayName());
+		
+		// Check for elite/developer permissions (same logic as chat command)
+		/*
+		if (!pPlayer->IsElite())
+		{
+			pPlayer->SendInfoMsg("Error: This command requires developer permissions.");
+			ALERT(at_console, "[AS_RELOAD_SCRIPTS] Permission denied for %s\n", pPlayer->DisplayName());
+			return;
+		}
+		*/
+
+		pPlayer->SendInfoMsg("Initiating script hot-reload via console command...");
+		ALERT(at_console, "[AS_RELOAD_SCRIPTS] Starting script hot-reload process\n");
+		
+		// Call the native C++ hot-reload functionality
+		ASModuleSystem* pModuleSystem = ASModuleSystem::Instance();
+		if (pModuleSystem)
+		{
+			bool reloadSuccess = pModuleSystem->ReloadAllModules();
+			
+			if (reloadSuccess)
+			{
+				pPlayer->SendInfoMsg("Script hot-reload completed successfully!");
+				ALERT(at_console, "[AS_RELOAD_SCRIPTS] Script hot-reload completed successfully\n");
+				
+				// Send notification to all players
+				for (int i = 1; i <= gpGlobals->maxClients; i++)
+				{
+					CBasePlayer* pOtherPlayer = (CBasePlayer*)UTIL_PlayerByIndex(i);
+					if (pOtherPlayer && pOtherPlayer != pPlayer && pOtherPlayer->m_Initialized)
+					{
+						pOtherPlayer->SendInfoMsg(msstring("Server scripts have been reloaded by ") + pPlayer->DisplayName());
+					}
+				}
+			}
+			else
+			{
+				pPlayer->SendInfoMsg("Script hot-reload failed! Check server console for details.");
+				ALERT(at_console, "[AS_RELOAD_SCRIPTS] Script hot-reload failed\n");
+			}
+		}
+		else
+		{
+			pPlayer->SendInfoMsg("Error: AngelScript module system not available.");
+			ALERT(at_console, "[AS_RELOAD_SCRIPTS] ASModuleSystem instance not available\n");
+		}
 	}
 	else if (FStrEq(pcmd, "localcb")) // MiB MAR2015_01 [LOCAL_PANEL] - For doing server-side callback
 	{
@@ -666,20 +833,41 @@ void ClientCommand2(edict_t *pEntity)
 	}
 	else if (FStrEq(pcmd, "menuoption"))
 	{
+		MS_ANGEL_INFO("menuoption command received from player %s", pPlayer ? pPlayer->DisplayName() : "NULL");
+		MS_ANGEL_INFO("  Arguments: %d", CMD_ARGC());
+		
 		if (CMD_ARGC() <= 2)
+		{
+			MS_ANGEL_ERROR("menuoption: Not enough arguments (need at least 3)");
 			return;
+		}
 
 		int EntIdx = atoi(CMD_ARGV(1));
+		MS_ANGEL_INFO("  Entity Index: %d", EntIdx);
+		MS_ANGEL_INFO("  Option Index: %s", CMD_ARGV(2));
+		
 		CBaseEntity *pEntity = MSInstance(INDEXENT(EntIdx));
-		if (!pEntity || !pEntity->IsMSMonster())
+		if (!pEntity)
+		{
+			MS_ANGEL_ERROR("menuoption: Entity at index %d is NULL", EntIdx);
 			return;
+		}
+		
+		if (!pEntity->IsMSMonster())
+		{
+			MS_ANGEL_ERROR("menuoption: Entity at index %d is not an MSMonster (classname: %s)", 
+			              EntIdx, STRING(pEntity->pev->classname));
+			return;
+		}
 
 		CMSMonster *pMonster = (CMSMonster *)pEntity;
 		int Option = atoi(CMD_ARGV(2));
 
+		MS_ANGEL_INFO("menuoption: Calling UseMenuOption on entity %d with option %d", EntIdx, Option);
 		pPlayer->InMenu = false;
 
 		pMonster->UseMenuOption(pPlayer, Option);
+		MS_ANGEL_INFO("menuoption: UseMenuOption completed");
 	}
 	else if (FStrEq(pcmd, "offer"))
 	{
@@ -925,7 +1113,7 @@ void ClientCommand2(edict_t *pEntity)
 			if (pItem)
 				pPlayer->DropItem(pItem, false, true);
 			else
-				MSErrorConsoleText("ClientCommand()", msstring("'drop' cmd couldn't find item to drop"));
+				MS_ERROR("ClientCommand() 'drop' cmd couldn't find item to drop");
 		}
 		else
 		{
@@ -1158,7 +1346,7 @@ void ClientCommand2(edict_t *pEntity)
 		if (!strcmp(CMD_ARGV(1), "GM"))
 		{
 			ALERT(at_console, "DEBUG: ce - requested GM as target\n");
-			CBaseEntity *pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+			CBaseEntity *pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 			if (pGameMasterEnt)
 			{
 				pScripted = pGameMasterEnt->GetScripted();
@@ -1252,10 +1440,10 @@ void ClientCommand2(edict_t *pEntity)
 					//pPlayer->m_fClientInitiated = false;
 				}
 				else
-					MSErrorConsoleText("ClientCommand - inv get item", msstring("Item ") + atoi(CMD_ARGV(3)) + " does not exist on player!");
+					MS_ERROR("ClientCommand - inv get item %i does not exist on player!", atoi(CMD_ARGV(3)));
 			}
 			else
-				MSErrorConsoleText("ClientCommand - inv get item", msstring("Pack ") + atoi(CMD_ARGV(2)) + " does not exist on player!");
+				MS_ERROR("ClientCommand - inv get item Pack %i does not exist on player!", atoi(CMD_ARGV(2)));
 		}
 		else if (FStrEq(CMD_ARGV(1), "open"))
 		{
@@ -1301,6 +1489,40 @@ void ClientCommand2(edict_t *pEntity)
 					pItem->CallScriptEvent("removefrompack"); //old
 					pItem->CallScriptEvent("game_removefrompack");
 				}
+			}
+		}
+		else if (FStrEq(CMD_ARGV(1), "split"))
+		{
+			CGenericItem *pItem = MSUtil_GetItemByID(atol(CMD_ARGV(2)), pPlayer);
+			int vNewStackAmount = atoi(CMD_ARGV(3));
+			if(pItem && vNewStackAmount && pItem->m_pParentContainer)
+			{
+				CGenericItem *pAddToHand = nullptr;
+
+				if(pItem->iQuantity == vNewStackAmount)
+				{
+					// Not sure why player "split" the whole stack, but don't
+					// bother creating a new item and deleting the current one,
+					// just move the current one
+					pAddToHand = pItem;
+				}
+				else
+				{
+					pAddToHand = NewGenericItem(pItem->m_Name);
+					if(pAddToHand)
+					{
+						pAddToHand->iQuantity = vNewStackAmount;
+						pItem->iQuantity -= vNewStackAmount;
+
+						MESSAGE_BEGIN(MSG_ONE, g_netmsg[NETMSG_ITEM], NULL, pPlayer->pev);
+							WRITE_BYTE(1);
+							SendGenericItem(pPlayer, pItem, false);
+						MESSAGE_END();
+					}
+				}
+
+				if(pAddToHand)
+					pAddToHand->GiveTo(pPlayer, true, false, true);
 			}
 		}
 	}
@@ -1641,7 +1863,9 @@ void ClientUserInfoChanged(edict_t *pEntity, char *infobuffer)
 		g_pGameRules->ClientUserInfoChanged(GetClassPtr((CBasePlayer *)&pEntity->v), infobuffer);
 }
 
-static int g_serveractive = 0;
+// Global server active flag - used to prevent script execution during level changes
+// NOT static so it can be accessed from other translation units
+int g_serveractive = 0;
 
 void ServerDeactivate(void)
 {
@@ -1656,22 +1880,50 @@ void ServerDeactivate(void)
 
 	// Peform any shutdown operations here...
 	//
+	
+	MS_INFO("=== ServerDeactivate: Starting map transition cleanup ===");
+	
+	// CRITICAL: COMPLETE AngelScript engine teardown and rebuild
+	// All entity indices are reused, so ALL entity references become invalid
+	// We must destroy and recreate the entire AngelScript engine to ensure clean state
+	CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
+	if (pASManager && pASManager->IsInitialized())
+	{
+		MS_INFO("ServerDeactivate: DESTROYING AND REBUILDING ENTIRE ANGELSCRIPT ENGINE...");
+		
+		// This will:
+		// 1. Clear all pooled contexts
+		// 2. Discard all script modules  
+		// 3. Shutdown debugger
+		// 4. Run extensive garbage collection
+		// 5. RELEASE AND DESTROY the AngelScript engine
+		// 6. CREATE A NEW AngelScript engine from scratch
+		// 7. Re-register all bindings and systems
+		pASManager->ReinitializeForLevelChange();
+		
+		MS_INFO("ServerDeactivate: AngelScript engine completely rebuilt - ready for new map");
+	}
+	
+	// IMPORTANT: Clear the game_master entity handle since all entities are destroyed during level change
+	// ServerActivate will create a new game_master entity in the new map
+	g_pGameMasterEntity = nullptr;
+	MS_INFO("Game_master entity handle cleared (will be recreated in ServerActivate)");
 
 	if (g_pGameRules)
 		g_pGameRules->EndMultiplayerGame();
 
 	MSGameEnd();
+	
+	MS_INFO("=== ServerDeactivate: Cleanup complete ===");
 }
 
 DLL_GLOBAL extern bool g_fInPrecache; //Code called from is in CWorld::Precache
 
 void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax)
 {
-	DBG_INPUT;
-	startdbg;
 	int i;
 	CBaseEntity *pClass;
-	logfile << Logger::LOG_INFO << "World Activate..." << std::flush;
+	MS_INFO("World Activate...");
 
 	// Every call to ServerActivate should be matched by a call to ServerDeactivate
 	g_serveractive = 1;
@@ -1697,14 +1949,13 @@ void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax)
 			Dbgstr += STRING(pClass->pev->targetname);
 			Dbgstr += ")";
 
-			dbg(Dbgstr);
 			try
 			{
 				pClass->Activate();
 			}
 			catch (...)
 			{
-				MSErrorConsoleText("ServerActivate", Dbgstr);
+				MS_ERROR("ServerActivate %s", Dbgstr);
 			}
 		}
 		//else
@@ -1717,26 +1968,81 @@ void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax)
 	LinkUserMessages();
 
 	//If the game master hasn't been created yet, create it now - Solokiller
-	CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+	MS_INFO("Checking for existing game_master entity...");
+	
+	// First check the global handle (might be set from previous level)
+	CBaseEntity* pGameMasterEnt = g_pGameMasterEntity;
+	
+	// Verify the global handle is still valid (entity might have been destroyed)
+	if (pGameMasterEnt && (FNullEnt(pGameMasterEnt->edict()) || (uintptr_t)pGameMasterEnt->pev == 0xdddddddd))
+	{
+		MS_INFO("Global game_master entity handle is stale (entity was destroyed), clearing...");
+		pGameMasterEnt = nullptr;
+		g_pGameMasterEntity = nullptr;
+	}
+	
+	// If not found via global, search by netname
 	if (!pGameMasterEnt)
 	{
-		logfile << Logger::LOG_INFO << "Spawning game master\n";
-		//TODO: this code was lifted from CScript::ScriptCmd_Create, considering refactoring - Solokiller
-		CMSMonster* NewMonster = (CMSMonster*)GET_PRIVATE(CREATE_NAMED_ENTITY(MAKE_STRING("ms_npc")));
-		if (NewMonster)
+		pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
+		if (pGameMasterEnt)
 		{
-			NewMonster->pev->origin = Vector(20000, -10000, -20000);
-			NewMonster->Spawn("game_master");
-
-			msstringlist params;
-			NewMonster->CallScriptEvent("game_dynamically_created", &params);
+			MS_INFO("Game master found via search at index %d", pGameMasterEnt->entindex());
 		}
+	}
+	else
+	{
+		MS_INFO("Game master found via global handle at index %d", pGameMasterEnt->entindex());
+	}
+	
+	if (!pGameMasterEnt)
+	{
+		MS_INFO("Game master not found, firing AngelScript ServerActivate event to create it...");
+		
+		// Fire AngelScript ServerActivate event to allow scripts to initialize and spawn game_master
+		CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
+		if (pASManager && pASManager->IsInitialized())
+		{
+			pASManager->CallGlobalFunctionWithParams("ServerActivate");
+			MS_INFO("ServerActivate event fired successfully");
+			
+			// After ServerActivate, try to find the game_master again
+			pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
+			if (pGameMasterEnt)
+			{
+				MS_INFO("Game master created by AngelScript at index %d", pGameMasterEnt->entindex());
+			}
+			else
+			{
+				MS_ERROR("AngelScript ServerActivate did not create game_master entity!");
+			}
+		}
+		else
+		{
+			MS_ERROR("AngelScript manager not available for ServerActivate event - game_master not created!");
+		}
+	}
+	else
+	{
+		MS_INFO("Game master entity already exists at index %d with netname '%s'", 
+		        pGameMasterEnt->entindex(), 
+		        pGameMasterEnt->pev->netname ? STRING(pGameMasterEnt->pev->netname) : "(null)");
+	}
+	
+	// Store the game_master entity in global handle for easy access
+	g_pGameMasterEntity = pGameMasterEnt;
+	if (g_pGameMasterEntity)
+	{
+		MS_INFO("Global game_master entity handle set (index %d)", g_pGameMasterEntity->entindex());
+	}
+	else
+	{
+		MS_ERROR("Failed to set global game_master entity handle!");
 	}
 
 	CSVGlobals::WriteScriptLog();
-
-	logfile << Logger::LOG_INFO << "World Activate END\n";
-	enddbg;
+    ASScriptContextManager::Instance()->LogContextInfo();
+	MS_INFO("World Activate END");
 }
 
 /*
@@ -1748,6 +2054,9 @@ Called every frame before physics are run
 */
 void PlayerPreThink(edict_t *pEntity)
 {
+	if (pEntity->pvPrivateData == 0x0)
+		return;
+
 	CBasePlayer *pPlayer = (CBasePlayer *)GET_PRIVATE(pEntity);
 
 	if (pPlayer)
@@ -1766,7 +2075,7 @@ void PlayerPostThink(edict_t *pEntity)
 {
 	CBasePlayer *pPlayer = (CBasePlayer *)GET_PRIVATE(pEntity);
 
-	if (pPlayer)
+	if (pPlayer && !FNullEnt(pPlayer))
 		pPlayer->PostThink();
 }
 
@@ -1902,11 +2211,10 @@ Engine is going to shut down, allows setting a breakpoint in game .dll to catch 
 */
 void Sys_Error(const char *error_string)
 {
-	DBG_INPUT;
 	// Default case, do nothing.  MOD AUTHORS:  Add code ( e.g., _asm { int 3 }; here to cause a breakpoint for debugging your game .dlls
 	msstring Error = msstring("SYS_ERROR: ") + (error_string ? error_string : "[NO STRING]");
 	//logfile << "SYS_ERROR: " << (error_string ? error_string : "[NO STRING]") << endl;
-	LogCurrentLine(Error.c_str());
+	MS_ERROR(Error);
 }
 
 /*
@@ -1941,8 +2249,6 @@ animation right now.
 */
 void PlayerCustomization(edict_t *pEntity, customization_t *pCust)
 {
-	DBG_INPUT;
-	startdbg;
 	entvars_t *pev = &pEntity->v;
 	CBasePlayer *pPlayer = (CBasePlayer *)GET_PRIVATE(pEntity);
 
@@ -1972,7 +2278,6 @@ void PlayerCustomization(edict_t *pEntity, customization_t *pCust)
 		ALERT(at_console, "PlayerCustomization:  Unknown customization type!\n");
 		break;
 	}
-	enddbg;
 }
 
 /*
@@ -1984,7 +2289,6 @@ A spectator has joined the game
 */
 void SpectatorConnect(edict_t *pEntity)
 {
-	DBG_INPUT;
 	entvars_t *pev = &pEntity->v;
 	CBaseSpectator *pPlayer = (CBaseSpectator *)GET_PRIVATE(pEntity);
 
@@ -2120,7 +2424,7 @@ int AddToFullPack(struct entity_state_s *state, int e, edict_t *ent, edict_t *ho
 	
 		// Ignore if not the host and not touching a PVS/PAS leaf
 		// If pSet is NULL, then the test will always succeed and the entity will be added to the update
-		if (ent != host && !FBitSet(ent->v.playerclass, ENT_EFFECT_FOLLOW_ROTATE))
+		if (ent != host || !FBitSet(ent->v.playerclass, ENT_EFFECT_FOLLOW_ROTATE))
 		{
 			if (!ENGINE_CHECK_VISIBILITY((const struct edict_s *)ent, pSet))
 			{
@@ -2219,13 +2523,9 @@ int AddToFullPack(struct entity_state_s *state, int e, edict_t *ent, edict_t *ho
 
 	// This replaces the above code.
 	if ((ent->v.flags & FL_FLY) != 0)
-	{
 		state->eflags |= EFLAG_SLERP;
-	}
 	else
-	{
 		state->eflags &= ~EFLAG_SLERP;
-	}
 
 	state->eflags |= entity->m_EFlags;
 
@@ -2277,7 +2577,8 @@ int AddToFullPack(struct entity_state_s *state, int e, edict_t *ent, edict_t *ho
 			state->owner = owner;
 	}
 
-	if (FBitSet(ent->v.playerclass, ENT_EFFECT_FOLLOW_ROTATE)) //For Master Sword's special follow
+	//For Master Sword's special follow
+	if (FBitSet(ent->v.playerclass, ENT_EFFECT_FOLLOW_ROTATE))
 	{
 		state->origin = ent->v.vuser1;
 		if (ent->v.owner)
@@ -2336,9 +2637,6 @@ Creates baselines used for network encoding, especially for player data since pl
 */
 void CreateBaseline(int player, int eindex, struct entity_state_s *baseline, struct edict_s *entity, int playermodelindex, vec3_t player_mins, vec3_t player_maxs)
 {
-	DBG_INPUT;
-	startdbg;
-	dbg("CreateBaseline - Begin");
 	baseline->origin = entity->v.origin;
 	baseline->angles = entity->v.angles;
 	baseline->frame = entity->v.frame;
@@ -2384,8 +2682,6 @@ void CreateBaseline(int player, int eindex, struct entity_state_s *baseline, str
 		baseline->framerate = entity->v.framerate;
 		baseline->gravity = entity->v.gravity;
 	}
-
-	enddbg;
 }
 
 typedef struct
@@ -2428,7 +2724,7 @@ static entity_field_alias_t entity_field_alias[] =
 
 void Entity_FieldInit(struct delta_s *pFields)
 {
-	int EntityFields = ARRAYSIZE(entity_field_alias);
+	int EntityFields = std::size(entity_field_alias);
 	for (int i = 0; i < EntityFields; i++)
 		entity_field_alias[i].field = DELTA_FINDFIELD(pFields, entity_field_alias[i].name);
 }
@@ -2685,7 +2981,6 @@ Allows game .dll to override network encoding of certain types of entities and t
 */
 void RegisterEncoders(void)
 {
-	DBG_INPUT;
 	DELTA_ADDENCODER("Entity_Encode", Entity_Encode);
 	DELTA_ADDENCODER("Custom_Encode", Custom_Encode);
 	DELTA_ADDENCODER("Player_Encode", Player_Encode);
@@ -2693,7 +2988,6 @@ void RegisterEncoders(void)
 
 int GetWeaponData(struct edict_s *player, struct weapon_data_s *info)
 {
-	DBG_INPUT;
 	memset(info, 0, 32 * sizeof(weapon_data_t));
 	return 1; //1
 }
@@ -2708,9 +3002,6 @@ engine sets cd to 0 before calling.
 */
 void UpdateClientData(const struct edict_s *ent, int sendweapons, struct clientdata_s *cd)
 {
-	DBG_INPUT;
-	startdbg;
-
 	cd->flags = ent->v.flags;
 	cd->health = ent->v.health;
 
@@ -2747,8 +3038,6 @@ void UpdateClientData(const struct edict_s *ent, int sendweapons, struct clientd
 	else
 		cd->iuser3 = 0;
 	//---------------
-
-	enddbg;
 }
 
 /*
@@ -2761,8 +3050,6 @@ This is the time to examine the usercmd for anything extra.  This call happens e
 */
 void CmdStart(const edict_t *player, const struct usercmd_s *cmd, unsigned int random_seed)
 {
-	DBG_INPUT;
-	startdbg;
 	CBasePlayer *pPlayer = (CBasePlayer *)CBasePlayer::Instance((entvars_t *)&player->v);
 
 	if (!pPlayer)
@@ -2774,8 +3061,6 @@ void CmdStart(const edict_t *player, const struct usercmd_s *cmd, unsigned int r
 	}
 
 	pPlayer->random_seed = random_seed;
-
-	enddbg;
 }
 
 /*
@@ -2787,8 +3072,6 @@ Each cmdstart is exactly matched with a cmd end, clean up any group trace flags,
 */
 void CmdEnd(const edict_t *player)
 {
-	DBG_INPUT;
-	startdbg;
 	entvars_t *pev = (entvars_t *)&player->v;
 	CBasePlayer *pl = (CBasePlayer *)CBasePlayer::Instance(pev);
 
@@ -2798,8 +3081,6 @@ void CmdEnd(const edict_t *player)
 	{
 		UTIL_UnsetGroupTrace();
 	}
-
-	enddbg;
 }
 
 /*
@@ -2812,7 +3093,6 @@ ConnectionlessPacket
 */
 int ConnectionlessPacket(const struct netadr_s *net_from, const char *args, char *response_buffer, int *response_buffer_size)
 {
-	DBG_INPUT;
 	// Parse stuff from args
 	int max_buffer_size = *response_buffer_size;
 
@@ -2847,7 +3127,6 @@ to be created during play ( e.g., grenades, ammo packs, projectiles, corpses, et
 */
 void CreateInstancedBaselines(void)
 {
-	DBG_INPUT;
 	//int iret = 0;
 	//entity_state_t state;
 
@@ -2870,7 +3149,6 @@ One of the ENGINE_FORCE_UNMODIFIED files failed the consistency check for the sp
 */
 int InconsistentFile(const edict_t *player, const char *filename, char *disconnect_message)
 {
-	DBG_INPUT;
 	// Server doesn't care?
 	//if ( CVAR_GET_FLOAT( "mp_consistency" ) != 1 )
 	//	return 0;
@@ -2898,6 +3176,5 @@ AllowLagCompensation
 */
 int AllowLagCompensation(void)
 {
-	DBG_INPUT;
 	return 0;
 }

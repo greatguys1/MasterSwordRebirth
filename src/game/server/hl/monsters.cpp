@@ -34,8 +34,6 @@
 #include "soundent.h"
 #include "gamerules.h"
 
-#include "logger.h" //MAR2008b debug - TEMPORARY
-
 #define MONSTER_CUT_CORNER_DIST 8 // 8 means the monster's bounding box is contained without the box of the node in WC
 
 Vector VecBModelOrigin(entvars_t *pevBModel);
@@ -114,14 +112,14 @@ int CBaseMonster::Save(CSave &save)
 {
 	if (!CBaseToggle::Save(save))
 		return 0;
-	return save.WriteFields("CBaseMonster", this, m_SaveData, ARRAYSIZE(m_SaveData));
+	return save.WriteFields("CBaseMonster", this, m_SaveData, std::size(m_SaveData));
 }
 
 int CBaseMonster::Restore(CRestore &restore)
 {
 	if (!CBaseToggle::Restore(restore))
 		return 0;
-	int status = restore.ReadFields("CBaseMonster", this, m_SaveData, ARRAYSIZE(m_SaveData));
+	int status = restore.ReadFields("CBaseMonster", this, m_SaveData, std::size(m_SaveData));
 
 	// We don't save/restore routes yet
 	RouteClear();
@@ -305,9 +303,6 @@ BOOL CBaseMonster ::FValidateHintType(short sHint)
 //=========================================================
 void CBaseMonster ::Look(int iDistance)
 {
-
-	//startdbg;
-
 	int iSighted = 0;
 
 	// DON'T let visibility information from last frame sit around!
@@ -406,10 +401,7 @@ void CBaseMonster ::Look(int iDistance)
 		}
 	}
 
-	//dbg("SetConditions");
 	SetConditions(iSighted);
-
-	//enddbg;
 }
 
 //=========================================================

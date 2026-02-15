@@ -24,8 +24,6 @@ public:
 
 	VGUI_MenuMain(Panel *pParent) : VGUI_MenuBase(pParent)
 	{
-		startdbg;
-
 		m_Name = "main";
 
 		Init();
@@ -43,13 +41,11 @@ public:
 				"#CANCEL", XRES(33), 0};
 
 		m_ButtonY = BTN_START_Y;
-		for (int i = 0; i < ARRAYSIZE(g_ButtonNames); i++)
+		for (int i = 0; i < std::size(g_ButtonNames); i++)
 			MSButton *pButton = AddButton(Localized(g_ButtonNames[i].Name), g_ButtonNames[i].Width, msvariant(g_ButtonNames[i].OptionScreen));
 
 		m_OptionsPanel = new CPanel_Options(this);
 		m_OptionsPanel->setVisible(false);
-
-		enddbg;
 	}
 
 	// Update

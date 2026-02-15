@@ -1,4 +1,4 @@
-//========= Copyright � 1996-2002, Valve LLC, All rights reserved. ============
+//========= Copyright (c) 1996-2002, Valve LLC, All rights reserved. ============
 //
 // Purpose:
 //
@@ -29,7 +29,6 @@
 //Master Sword
 #include "vgui_scorepanel.h"
 #include "vgui_menudefsshared.h"
-#include "logger.h"
 #include "filesystem_shared.h"
 
 extern "C" float* vec3_origin;
@@ -203,9 +202,8 @@ void UTIL_StringToVector(float *pVector, const char *pString)
 	}
 }
 
-int UTIL_FindEntityInMap(char *name, float *origin, float *angle)
+int UTIL_FindEntityInMap(const char *name, float *origin, float *angle)
 {
-	startdbg;
 	int n, found = 0;
 	char keyname[256];
 	char token[1024];
@@ -326,7 +324,6 @@ int UTIL_FindEntityInMap(char *name, float *origin, float *angle)
 			return 1;
 	}
 
-	enddbg;
 	return 0; // we search all entities, but didn't found the correct
 }
 
@@ -468,7 +465,7 @@ int CHudSpectator::Draw(float flTime)
 void CHudSpectator::DirectorMessage(int iSize, void *pbuf)
 {
 	float value;
-	char *string;
+	const char *string;
 
 	BEGIN_READ(pbuf, iSize);
 
@@ -482,7 +479,6 @@ void CHudSpectator::DirectorMessage(int iSize, void *pbuf)
 		g_iTeamNumber = 0;
 
 		// fake a InitHUD & ResetHUD message
-		logfile << Logger::LOG_INFO << "[DRC_CMD_START: MsgFunc_InitHUD]\n";
 		gHUD.MsgFunc_InitHUD(NULL, 0, NULL);
 		gHUD.MsgFunc_ResetHUD(NULL, 0, NULL);
 
@@ -1565,7 +1561,6 @@ int CHudSpectator::ToggleInset(bool allowOff)
 }
 void CHudSpectator::Reset()
 {
-	startdbg;
 	// Reset HUD
 	if (strcmp(m_OverviewData.map, gEngfuncs.pfnGetLevelName()))
 	{
@@ -1577,7 +1572,6 @@ void CHudSpectator::Reset()
 	memset(&m_OverviewEntities, 0, sizeof(m_OverviewEntities));
 
 	SetSpectatorStartPosition();
-	enddbg;
 }
 
 void CHudSpectator::InitHUDData()

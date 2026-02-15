@@ -80,7 +80,9 @@ typedef int EOFFSET;
 typedef int BOOL;
 
 // In case this ever changes
+#ifndef M_PI
 #define M_PI 3.14159265358979323846
+#endif
 
 // Keeps clutter down a bit, when declaring external entity/global method prototypes
 #define DECLARE_GLOBAL_METHOD(MethodName)  extern void UTIL_DLLEXPORT MethodName( void )
@@ -106,7 +108,14 @@ typedef int BOOL;
 //
 #ifdef DEBUG
 extern edict_t *DBG_EntOfVars(const entvars_t *pev);
-inline edict_t *ENT(const entvars_t *pev) { return DBG_EntOfVars(pev); }
+inline edict_t* ENT(const entvars_t* pev) {
+	if ((uintptr_t)pev == 0xdddddddd || pev == nullptr)
+	{
+		return nullptr;
+	};
+
+	return DBG_EntOfVars(pev); 
+}
 #else
 inline edict_t *ENT(const entvars_t *pev)
 {
@@ -261,7 +270,7 @@ extern void UTIL_DoTokenScriptEvent(const char *tokenevents, CBaseEntity *pTarge
 extern float UTIL_StringToSecs(const char *timein);									//DEC2014_21 Thothie - Centralizing music/time conversion
 
 extern void Util_ScriptArray(CBaseEntity *pEntity, const char *array_operation, const char *array_name, const char *array_value); //NOV2014_16 Thothie - making code side array changes easier
-extern char *Util_ScriptArrayGetProps(CBaseEntity *pEntity, const char *array_operation, const char *array_name, int subIdx);	  //NOV2014_16 Thothie - making code side array changes easier
+extern const char *Util_ScriptArrayGetProps(CBaseEntity *pEntity, const char *array_operation, const char *array_name, int subIdx);	  //NOV2014_16 Thothie - making code side array changes easier
 
 //[begin] NOV2014_09 Thothie - centralizing afk/bot checking
 extern int UTIL_NumPlayers();
@@ -388,7 +397,7 @@ extern char *UTIL_dtos3(int d);
 extern char *UTIL_dtos4(int d);
 
 // Writes message to console with timestamp and FragLog header.
-extern void UTIL_LogPrintf(char *fmt, ...);
+extern void UTIL_LogPrintf(const char *fmt, ...);
 
 // Sorta like FInViewCone, but for nonmonsters.
 extern float UTIL_DotPoints(const Vector &vecSrc, const Vector &vecCheck, const Vector &vecDir);
@@ -589,14 +598,14 @@ void EMIT_GROUPNAME_SUIT(edict_t *entity, const char *groupname);
 
 #define PRECACHE_SOUND_ARRAY(a)                \
 	{                                          \
-		for (int i = 0; i < ARRAYSIZE(a); i++) \
+		for (int i = 0; i < std::size(a); i++) \
 			PRECACHE_SOUND((char *)a[i]);      \
 	}
 
 #define EMIT_SOUND_ARRAY_DYN(chan, array) \
-	EMIT_SOUND_DYN(ENT(pev), chan, array[RANDOM_LONG(0, ARRAYSIZE(array) - 1)], 1.0, ATTN_NORM, 0, RANDOM_LONG(95, 105));
+	EMIT_SOUND_DYN(ENT(pev), chan, array[RANDOM_LONG(0, std::size(array) - 1)], 1.0, ATTN_NORM, 0, RANDOM_LONG(95, 105));
 
-#define RANDOM_SOUND_ARRAY(array) (array)[RANDOM_LONG(0, ARRAYSIZE((array)) - 1)]
+#define RANDOM_SOUND_ARRAY(array) (array)[RANDOM_LONG(0, std::size((array)) - 1)]
 
 #define PLAYBACK_EVENT(flags, who, index) PLAYBACK_EVENT_FULL(flags, who, index, 0, (float *)&g_vecZero, (float *)&g_vecZero, 0.0, 0.0, 0, 0, 0, 0);
 #define PLAYBACK_EVENT_DELAY(flags, who, index, delay) PLAYBACK_EVENT_FULL(flags, who, index, delay, (float *)&g_vecZero, (float *)&g_vecZero, 0.0, 0.0, 0, 0, 0, 0);

@@ -24,7 +24,6 @@
 #include "func_break.h"
 #include "decals.h"
 #include "explode.h"
-#include "logger.h"
 
 extern DLL_GLOBAL Vector g_vecAttackDir;
 
@@ -231,28 +230,28 @@ const char **CBreakable::MaterialSoundList(Materials precacheMaterial, int &soun
 	{
 	case matWood:
 		pSoundList = pSoundsWood;
-		soundCount = ARRAYSIZE(pSoundsWood);
+		soundCount = std::size(pSoundsWood);
 		break;
 	case matFlesh:
 		pSoundList = pSoundsFlesh;
-		soundCount = ARRAYSIZE(pSoundsFlesh);
+		soundCount = std::size(pSoundsFlesh);
 		break;
 	case matComputer:
 	case matUnbreakableGlass:
 	case matGlass:
 		pSoundList = pSoundsGlass;
-		soundCount = ARRAYSIZE(pSoundsGlass);
+		soundCount = std::size(pSoundsGlass);
 		break;
 
 	case matMetal:
 		pSoundList = pSoundsMetal;
-		soundCount = ARRAYSIZE(pSoundsMetal);
+		soundCount = std::size(pSoundsMetal);
 		break;
 
 	case matCinderBlock:
 	case matRocks:
 		pSoundList = pSoundsConcrete;
-		soundCount = ARRAYSIZE(pSoundsConcrete);
+		soundCount = std::size(pSoundsConcrete);
 		break;
 
 	case matCeilingTile:
@@ -365,7 +364,7 @@ void CBreakable::DamageSound(void)
 {
 	int pitch;
 	float fvol;
-	char *rgpsz[6];
+	const char *rgpsz[6];
 	int i = 0;
 	int material = m_Material;
 
@@ -497,7 +496,6 @@ void CBreakable::Use(CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE use
 
 void CBreakable::TraceAttack(entvars_t *pevAttacker, float flDamage, Vector vecDir, TraceResult *ptr, int bitsDamageType)
 {
-	startdbg;
 	// random spark if this is a 'computer' object
 	if (RANDOM_LONG(0, 1))
 	{
@@ -527,7 +525,6 @@ void CBreakable::TraceAttack(entvars_t *pevAttacker, float flDamage, Vector vecD
 	}
 
 	CBaseDelay::TraceAttack(pev, pevAttacker, flDamage, vecDir, ptr, bitsDamageType);
-	enddbg;
 }
 
 //=========================================================
@@ -537,7 +534,6 @@ void CBreakable::TraceAttack(entvars_t *pevAttacker, float flDamage, Vector vecD
 //=========================================================
 int CBreakable ::TakeDamage(entvars_t *pevInflictor, entvars_t *pevAttacker, float flDamage, int bitsDamageType)
 {
-	startdbg;
 	Vector vecTemp;
 
 	// if Attacker == Inflictor, the attack was a melee or other instant-hit attack.
@@ -585,7 +581,7 @@ int CBreakable ::TakeDamage(entvars_t *pevInflictor, entvars_t *pevAttacker, flo
 			{
 				if (m_scriptevent.starts_with("gm_"))
 				{
-					CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("¯") + "game_master");
+					CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
 					IScripted* pGMScript = (pGameMasterEnt ? pGameMasterEnt->GetScripted() : NULL);
 					if (pGMScript)
 					{
@@ -648,8 +644,6 @@ int CBreakable ::TakeDamage(entvars_t *pevInflictor, entvars_t *pevAttacker, flo
 	// Don't play shard noise if cbreakable actually died.
 
 	DamageSound();
-
-	enddbg;
 	return 1;
 }
 
@@ -875,7 +869,7 @@ public:
 
 	static TYPEDESCRIPTION m_SaveData[];
 
-	static char *m_soundNames[3];
+	static const char *m_soundNames[3];
 	int m_lastSound; // no need to save/restore, just keeps the same sound from playing twice in a row
 	float m_maxSpeed;
 	float m_soundTime;
@@ -891,7 +885,7 @@ IMPLEMENT_SAVERESTORE(CPushable, CBreakable);
 
 LINK_ENTITY_TO_CLASS(func_pushable, CPushable);
 
-char *CPushable ::m_soundNames[3] = {"debris/pushbox1.wav", "debris/pushbox2.wav", "debris/pushbox3.wav"};
+const char *CPushable ::m_soundNames[3] = {"debris/pushbox1.wav", "debris/pushbox2.wav", "debris/pushbox3.wav"};
 
 void CPushable ::Spawn(void)
 {
