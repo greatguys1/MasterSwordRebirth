@@ -934,6 +934,14 @@ void ClientCommand2(edict_t *pEntity)
 		}
 		pPlayer->m_hEnemy = NULL;
 	}
+	else if (FStrEq(pcmd, "pnoclip"))
+	{
+		pPlayer->pev->movetype = MOVETYPE_NOCLIP;
+		pPlayer->pev->solid = SOLID_NOT;
+		SetBits(pPlayer->m_afPhysicsFlags, PFLAG_OBSERVER);
+		SetBits(pPlayer->pev->flags, FL_NOTARGET);
+		//pPlayer->SetSpeed( 300 );
+	}
 	else if (FStrEq(pcmd, "storage"))
 	{
 		if (CMD_ARGC() < 2)
@@ -1337,77 +1345,6 @@ void ClientCommand2(edict_t *pEntity)
 			//Fix it by forcing an update
 			pPlayer->m_ClientCurrentHand = -1;
 		}*/
-	}
-	//Thothie JUL2011_02 - Dynamic Client Command
-	else if (FStrEq(pcmd, "ce"))
-	{
-		//clcmd <player|GM> <event> <params> - called by client-side script command clcmd
-		/*IScripted *pScripted = NULL;
-		if (!strcmp(CMD_ARGV(1), "GM"))
-		{
-			ALERT(at_console, "DEBUG: ce - requested GM as target\n");
-			CBaseEntity *pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
-			if (pGameMasterEnt)
-			{
-				pScripted = pGameMasterEnt->GetScripted();
-			}
-			else
-			{
-				ALERT(at_console, "ERROR: ce - Failed to find game master!\n");
-			}
-		}
-		else
-		{
-			if (!strcmp(CMD_ARGV(1), "player"))
-			{
-				pScripted = pPlayer->GetScripted();
-			}
-		}
-
-		if (pScripted)
-		{
-			static msstringlist Params;
-			Params.clearitems();
-			int i = 0;
-			for (i = 0; i < CMD_ARGC(); i++)
-			{
-				if (i > 2)
-				{
-					Params.add(CMD_ARGV(i));
-				}
-			}
-			Params.add(CMD_ARGV(i + 1));
-			pScripted->CallScriptEvent(CMD_ARGV(2), &Params);
-		}*/
-
-		/*
-		CBaseEntity *pEntity = StringToEnt( CMD_ARGV(1) );
-		if( pEntity )
-		{
-			pScripted = pEntity->GetScripted();
-			if ( pScripted )
-			{
-				static msstringlist Params;
-				Params.clearitems( );
-				 for (int i = 0; i < CMD_ARGC(); i++)
-				{
-					if ( i > 2 )
-					{
-						Params.add( CMD_ARGV(i) );
-					}
-				}
-				pScripted->CallScriptEvent( CMD_ARGV(2), &Params );
-			}
-			else
-			{
-				MSErrorConsoleText( "clcmd - entity ", msstring(CMD_ARGV(1)) + " found, but not scripted." );
-			}
-		}
-		else
-		{
-			MSErrorConsoleText( "clcmd - entity ", msstring(CMD_ARGV(1)) + " not found." );
-		}
-		*/
 	}
 	else if (FStrEq(pcmd, "inv") && CMD_ARGV(1) && bCanUseInventory) //MAY2008 - no pulling invenotry when you cant attack
 	{
@@ -1995,42 +1932,70 @@ void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax)
 		MS_INFO("Game master found via global handle at index %d", pGameMasterEnt->entindex());
 	}
 	
-	if (!pGameMasterEnt)
+	CBaseEntity* pInitGameMaster = nullptr;
+	if (as_enabled.value > 0)
 	{
-		MS_INFO("Game master not found, firing AngelScript ServerActivate event to create it...");
-		
-		// Fire AngelScript ServerActivate event to allow scripts to initialize and spawn game_master
-		CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
-		if (pASManager && pASManager->IsInitialized())
+		if (!pGameMasterEnt)
 		{
-			pASManager->CallGlobalFunctionWithParams("ServerActivate");
-			MS_INFO("ServerActivate event fired successfully");
+			MS_INFO("Game master not found, firing AngelScript ServerActivate event to create it...");
 			
-			// After ServerActivate, try to find the game_master again
-			pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
-			if (pGameMasterEnt)
+			// Fire AngelScript ServerActivate event to allow scripts to initialize and spawn game_master
+			CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
+			if (pASManager && pASManager->IsInitialized())
 			{
-				MS_INFO("Game master created by AngelScript at index %d", pGameMasterEnt->entindex());
+				pASManager->CallGlobalFunctionWithParams("ServerActivate");
+				MS_INFO("ServerActivate event fired successfully");
+				
+				// After ServerActivate, try to find the game_master again
+				pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
+				if (pGameMasterEnt)
+				{
+					MS_INFO("Game master created by AngelScript at index %d", pGameMasterEnt->entindex());
+				}
+				else
+				{
+					MS_ERROR("AngelScript ServerActivate did not create game_master entity!");
+				}
 			}
 			else
 			{
-				MS_ERROR("AngelScript ServerActivate did not create game_master entity!");
+				MS_ERROR("AngelScript manager not available for ServerActivate event - game_master not created!");
 			}
 		}
 		else
 		{
-			MS_ERROR("AngelScript manager not available for ServerActivate event - game_master not created!");
+			MS_INFO("Game master entity already exists at index %d with netname '%s'", 
+					pGameMasterEnt->entindex(), 
+					pGameMasterEnt->pev->netname ? STRING(pGameMasterEnt->pev->netname) : "(null)");
 		}
 	}
 	else
 	{
-		MS_INFO("Game master entity already exists at index %d with netname '%s'", 
-		        pGameMasterEnt->entindex(), 
-		        pGameMasterEnt->pev->netname ? STRING(pGameMasterEnt->pev->netname) : "(null)");
+		CBaseEntity* pGameMasterEnt = UTIL_FindEntityByString(NULL, "netname", msstring("-") + "game_master");
+		if (!pGameMasterEnt)
+		{
+			MS_INFO("Creating legacy game master");
+			//TODO: this code was lifted from CScript::ScriptCmd_Create, considering refactoring - Solokiller
+			CMSMonster* NewMob = (CMSMonster*)GET_PRIVATE(CREATE_NAMED_ENTITY(MAKE_STRING("ms_npc")));
+			if (NewMob)
+			{
+				NewMob->pev->origin = Vector(20000, -10000, -20000);
+				NewMob->Spawn("game_master");
+
+				msstringlist params;
+				NewMob->CallScriptEvent("game_dynamically_created", &params);
+				MS_INFO("Created legacy game master");
+				pInitGameMaster = NewMob;
+			}
+		}
 	}
-	
+
 	// Store the game_master entity in global handle for easy access
-	g_pGameMasterEntity = pGameMasterEnt;
+	if (pGameMasterEnt)
+		g_pGameMasterEntity = pGameMasterEnt;
+	else
+		g_pGameMasterEntity = pInitGameMaster;
+
 	if (g_pGameMasterEntity)
 	{
 		MS_INFO("Global game_master entity handle set (index %d)", g_pGameMasterEntity->entindex());

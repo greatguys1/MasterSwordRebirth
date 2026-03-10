@@ -51,7 +51,7 @@ cvar_t msallowtimevote = {"ms_allowtimevote", "1", FCVAR_SERVER};
 cvar_t ms_reset_time = {"ms_reset_time", "10", FCVAR_SERVER};
 cvar_t ms_reset_map = {"ms_reset_map", "edana", FCVAR_SERVER};
 cvar_t ms_version = {"ms_version", __DATE__, FCVAR_EXTDLL};
-cvar_t ms_pklevel = {"ms_pklevel", "0", FCVAR_SERVER};
+cvar_t ms_pklevel = {"ms_pklevel", "0", FCVAR_SERVER}; // 1 == in town only
 //cvar_t	ms_trans_req	= {"ms_trans_req","0", FCVAR_SERVER }; //Thothie JUN2007 - max players required to activate a transition (0 = all on server) - nvm, changed method - nvm, changed method
 cvar_t ms_fxlimit = {"ms_fxlimit", "0", FCVAR_SERVER};
 //cvar_t	ms_currentfx	= {"ms_currentfx","0", 0 }; //Thothie - want to make FX control total ms.dll, but can't figure how
@@ -77,7 +77,7 @@ cvar_t ms_debug_mem = {"ms_debug_mem", "0", 0};
 //cvar_t ms_crashcfg = {"ms_crashcfg", "crashed", FCVAR_SERVER};
 
 //AngelScript CVARs
-cvar_t as_enabled = {const_cast<char*>("as_enabled"), "1", FCVAR_SERVER};
+cvar_t as_enabled = {const_cast<char*>("as_enabled"), "0", FCVAR_SERVER};
 cvar_t as_memory_limit = {const_cast<char*>("as_memory_limit"), "1073741824", FCVAR_SERVER}; // 1GB
 cvar_t as_memory_debug = {const_cast<char*>("as_memory_debug"), "0", FCVAR_SERVER};
 cvar_t as_gc_interval = {const_cast<char*>("as_gc_interval"), "60", FCVAR_SERVER};
@@ -194,10 +194,9 @@ void MSWorldSpawn()
 	MS_INFO("=== MSWorldSpawn: Starting map initialization ===");
 	
 	//Setup global variables that can't be changed during a game
-	MSGlobals::PKAllowed = ms_pklevel.value > 0 ? true : false;
+	MSGlobals::PKAllowed = ms_pklevel.value > 0.0f ? true : false;
 	//Thothie attemptitng to remove FN upload sploit (Thanx to MiB)
 	MSGlobals::CentralEnabled = CVAR_GET_FLOAT("ms_central_enabled") > 0.0f ? true : false;
-	
 	// CRITICAL: Reload AngelScript modules after level change
 	// All modules were cleared in ServerDeactivate via PrepareForLevelChange()
 	// We need to reload them now for the new map
@@ -209,8 +208,7 @@ void MSWorldSpawn()
 			MS_INFO("MSWorldSpawn: Reloading AngelScript modules for new map...");
 			
 			// Open the scripts.pak file for reading AngelScript modules
-			CGameGroupFile groupFile;
-			if (!groupFile.Open("scripts.pak"))
+			if (!g_ScriptPack.Open("scripts.pak"))
 			{
 				MS_ERROR("MSWorldSpawn: Failed to open scripts.pak for module reloading");
 			}
@@ -225,10 +223,10 @@ void MSWorldSpawn()
 						MS_INFO("MSWorldSpawn: Using automatic module discovery...");
 						
 						// Discover modules with 'module ModuleName {' syntax
-						if (pModuleSystem->DiscoverModulesInPak(&groupFile))
+						if (pModuleSystem->DiscoverModulesInPak(&g_ScriptPack))
 						{
 							// Load all discovered modules
-							if (pModuleSystem->LoadDiscoveredModules(&groupFile))
+							if (pModuleSystem->LoadDiscoveredModules(&g_ScriptPack))
 							{
 								MS_INFO("MSWorldSpawn: AngelScript modules reloaded successfully!");
 							}
@@ -261,8 +259,14 @@ void MSWorldSpawn()
 	//MSGlobals::FXLimit = CVAR_GET_FLOAT("ms_fxlimit");
 	MSGlobals::PKAllowedinTown = ms_pklevel.value > 1 ? true : false;
 	MSGlobals::IsLanGame = CVAR_GET_FLOAT("sv_lan") ? true : false;
+	MSGlobals::DevModeEnabled = ms_dev_mode.value > 0.0f && !MSGlobals::CentralEnabled ? true : false;
+	MSGlobals::PKAllowedinTown = ms_pklevel.value > 1.0f ? true : false;
+
+	// sv_lan seems to be set to 1 after disconnecting from a listen server and creating a new one.
+	// engine bug maybe?
+	MSGlobals::IsLanGame = CVAR_GET_FLOAT("sv_lan") > 0.0f ? true : false;
 	MSGlobals::CanCreateCharOnMap = false;
-	MSGlobals::ServerSideChar = ms_serverchar.value ? true : false;
+	MSGlobals::ServerSideChar = ms_serverchar.value > 0.0f ? true : false;
 	MSGlobals::MapName = STRING(gpGlobals->mapname);
 	
 	//Force the client to use the same client lib as the server. - Solokiller
@@ -379,8 +383,7 @@ void MSWorldSpawn()
 		MS_INFO("Initializing AngelScript Module System...");
 		
 		// Open the scripts.pak file for reading AngelScript modules
-		CGameGroupFile groupFile;
-		if (!groupFile.Open("scripts.pak"))
+		if (!g_ScriptPack.Open("scripts.pak"))
 		{
 			g_engfuncs.pfnServerPrint("ERROR: Failed to open scripts.pak for modules\n");
 			MS_INFO("Failed to open scripts.pak for modules");
@@ -397,10 +400,10 @@ void MSWorldSpawn()
 					MS_INFO("Using automatic module discovery...");
 					
 					// Discover modules with 'module ModuleName {' syntax
-					if (pModuleSystem->DiscoverModulesInPak(&groupFile))
+					if (pModuleSystem->DiscoverModulesInPak(&g_ScriptPack))
 					{
 						// Load all discovered modules
-						if (pModuleSystem->LoadDiscoveredModules(&groupFile))
+						if (pModuleSystem->LoadDiscoveredModules(&g_ScriptPack))
 						{
 							g_engfuncs.pfnServerPrint("AngelScript modules loaded successfully!\n");
 							MS_INFO("AngelScript modules loaded successfully!");
@@ -439,7 +442,7 @@ void MSWorldSpawn()
 					for (int i = 0; i < 7; i++)
 					{
 						unsigned long fileSize;
-						if (!groupFile.ReadEntry(legacyModules[i], NULL, fileSize))
+						if (!g_ScriptPack.ReadEntry(legacyModules[i], NULL, fileSize))
 						{
 							char errorMsg[256];
 							snprintf(errorMsg, sizeof(errorMsg), "Legacy module not found: %s\n", legacyModules[i]);
@@ -450,7 +453,7 @@ void MSWorldSpawn()
 						}
 						
 						char* scriptContent = new char[fileSize + 1];
-						if (!groupFile.ReadEntry(legacyModules[i], (byte*)scriptContent, fileSize))
+						if (!g_ScriptPack.ReadEntry(legacyModules[i], (byte*)scriptContent, fileSize))
 						{
 							delete[] scriptContent;
 							bSuccess = false;
@@ -471,7 +474,7 @@ void MSWorldSpawn()
 						options.allowOverwrite = true;
 						options.resolveDependencies = true;
 						
-						if (!pModuleSystem->LoadModuleFromMemory(modName, scriptContent, &groupFile, options))
+						if (!pModuleSystem->LoadModuleFromMemory(modName, scriptContent, &g_ScriptPack, options))
 						{
 							bSuccess = false;
 						}
@@ -536,11 +539,12 @@ void MSGameEnd()
 	for(int i = 1; i <= gpGlobals->maxClients; ++i)
 	{
 		CBasePlayer *pPlayer = static_cast<CBasePlayer*>(UTIL_PlayerByIndex(i));
-		//TODO: make sure player is actually connected and in valid state (i.e. not missing inventory) - Solokiller
-		if(pPlayer)
+
+		if((pPlayer) && (pPlayer->m_CharacterState == CHARSTATE_LOADED))
 		{
 			pPlayer->SaveChar();
-			if(!MSGlobals::ServerSideChar) pPlayer->m_TimeCharLastSent = 0;
+			if(!MSGlobals::ServerSideChar) 
+				pPlayer->m_TimeCharLastSent = 0;
 		}
 	}
 	

@@ -675,7 +675,7 @@ void CNewCharacterPanel::Update()
 	if( MSGlobals::ServerSideChar )
 	{
 		cTemp2[0] = 0;
-		if (MSGlobals::IsLanGame) 
+		if ((MSGlobals::IsLanGame) && (MSGlobals::ServerSideChar == false)) 
 			_snprintf(cTemp2, sizeof(cTemp2), "\n%s", Localized("#CHOOSECHAR_LAN"));
 
 		if(ChooseChar_Interface::CentralServer)
@@ -1204,7 +1204,7 @@ void CRenderChar::Render( )
 		return;
 
 	Vector vForward, vRight, vUp;
-	EngineFunc::MakeVectors( ViewMgr.Angles, vForward, vRight, vUp );
+	EngineFunc::MakeVectors( ViewMgr.Angles, &vForward, &vRight, &vUp );
 
 	m_Ent.origin = ViewMgr.Origin + vForward * 5.0f + vUp * 0.4;
 	if( m_Stage == STG_CHOOSECHAR )
@@ -1221,8 +1221,8 @@ void CRenderChar::Render( )
 	//Thothie FEB2011_02 - don't figure gear for gender entries, or will inherit from other slots
 	if( m_Stage != STG_CHOOSEGENDER )
 	{
-		m_GearItems.clearitems( );
-		m_Gear.clearitems( );
+		m_GearItems.clear();
+		m_Gear.clear();
 		uint BodyParts[HUMAN_BODYPARTS] = { 0 };
 		
 		for (int i = 0; i < player.m_CharInfo[m_Idx].GearInfo.size(); i++) 
@@ -1262,7 +1262,7 @@ void CRenderChar::Render( )
 			SetBits( ItemEnt.curstate.oldbuttons, MSRDR_NOREFLECT );
 			SetBits( ItemEnt.curstate.colormap, MSRDR_LIGHT_NORMAL );
 
-			m_GearItems.add( pItem );
+			m_GearItems.push_back( pItem );
 
 			pItem.RemoveFromOwner();
 			pItem.Container_RemoveAllItems();
@@ -1270,7 +1270,7 @@ void CRenderChar::Render( )
 
 		}
 		for (int i = 0; i < m_GearItems.size(); i++) 
-			m_Gear.add( &m_GearItems[i] );
+			m_Gear.push_back( &m_GearItems[i] );
 	}
 
 	if( m_Active )
@@ -1413,7 +1413,7 @@ void CRenderSpawnbox::Init( )
 void CRenderSpawnbox::Render( )
 {
 	Vector vForward, vRight, vUp;
-	EngineFunc::MakeVectors( ViewMgr.Angles, vForward, vRight, vUp );
+	EngineFunc::MakeVectors( ViewMgr.Angles, &vForward, &vRight, &vUp );
 	m_Ent.origin = ViewMgr.Origin;
 	m_Ent.angles = Vector( ViewMgr.Angles.x, ViewMgr.Angles.y + 180, 0 );
  	m_Ent.curstate.angles = m_Ent.angles;

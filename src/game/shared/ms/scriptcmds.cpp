@@ -1035,7 +1035,7 @@ const char* CBaseEntity::GetProp(CBaseEntity *pTarget, msstring &FullParams, mss
 	else if (Prop == "forwardspeed")
 	{
 		Vector vForward;
-		EngineFunc::MakeVectors(pTarget->pev->v_angle, vForward, NULL, NULL);
+		EngineFunc::MakeVectors(pTarget->pev->v_angle, &vForward, NULL, NULL);
 		RETURN_FLOAT(DotProduct(pTarget->pev->velocity, vForward));
 	}
 	else if (Prop == "absmin") //Thothie DEC2014_12
@@ -1163,12 +1163,12 @@ const char* CBaseEntity::GetProp(CBaseEntity *pTarget, msstring &FullParams, mss
 	else if (Prop.starts_with("angles"))
 	{
 		RETURN_ANGLE("angles", pTarget->pev->angles)
-			RETURN_POSITION("angles", pTarget->pev->angles)
+		RETURN_POSITION("angles", pTarget->pev->angles)
 	}
 	else if (Prop.starts_with("viewangles"))
 	{
 		RETURN_ANGLE("viewangles", pTarget->pev->v_angle)
-			RETURN_POSITION("viewangles", pTarget->pev->v_angle)
+		RETURN_POSITION("viewangles", pTarget->pev->v_angle)
 	}
 	else if (Prop == "target")
 	{
@@ -2239,7 +2239,7 @@ bool CScript::ScriptCmd_CallEvent(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstrin
 			}
 			else if (Params[0] == "gamemaster")
 			{
-#if VALVE_DLL
+#ifdef VALVE_DLL
 				CBaseEntity *pEntity = UTIL_FindEntityByString(nullptr, "netname", msstring("-") + "game_master");
 				if (pEntity) pScripted = pEntity->GetScripted();
 #endif
@@ -3660,14 +3660,16 @@ bool CScript::ScriptCmd_HelpTip(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringl
 	//Thothie JAN2011_04 - modded to allow sending of helptip to all players
 	if( Params.size() >= 4 )
 	{
-		MSGlobals::Buffer[0] = 0;
+		std::string buffer = "";
 		for(int i = 0; i < Params.size() - 3; i++)
-			strncat(MSGlobals::Buffer, Params[i + 3], Params[i + 3].len());
+			buffer += static_cast<const char*>(Params[i+3]);
+
 		if ( Params[0] != "all" )
 		{
 			CBaseEntity *pEntity = m.pScriptedEnt ? m.pScriptedEnt->RetrieveEntity(Params[0]) : NULL;
 			CBasePlayer *pPlayer = (CBasePlayer *)pEntity;
-			if ( pPlayer ) pPlayer->SendHelpMsg(Params[1], Params[2], MSGlobals::Buffer);
+			if ( pPlayer ) 
+				pPlayer->SendHelpMsg(Params[1], Params[2], buffer.c_str());
 		}
 		else
 		{
@@ -3675,7 +3677,8 @@ bool CScript::ScriptCmd_HelpTip(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringl
 			{
 				CBaseEntity *pEntity = UTIL_PlayerByIndex(i);
 				CBasePlayer *pPlayer = (CBasePlayer *)pEntity;;
-				if ( pPlayer ) pPlayer->SendHelpMsg(Params[1], Params[2], MSGlobals::Buffer);
+				if ( pPlayer ) 
+					pPlayer->SendHelpMsg(Params[1], Params[2], buffer.c_str());
 			}
 		}
 	}
@@ -5073,38 +5076,42 @@ bool CScript::ScriptCmd_RegisterTexture(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, m
 //- registers possible player titles based on weapon skills under the default title system
 bool CScript::ScriptCmd_RegisterTitle(SCRIPT_EVENT &Event, scriptcmd_t &Cmd, msstringlist &Params)
 {
-	if (Params.size() >= 1)
-	{
-		if (Params.size() < 2)
-		{	//Default title
-			CTitleManager::DefaultTitle.Name = Params[0];
-			CTitleManager::DefaultTitle.MinLevel = 0;
-		}
-		else
-		{	//Specific title
-			title_t NewTitle;
-			NewTitle.Name = Params[0];
-			NewTitle.MinLevel = atoi(GetScriptVar("TITLE_MINSKILL"));
-			static msstringlist Skills;
-			Skills.clearitems();
-			TokenizeString(Params[1], Skills);
-			bool SkillSuccess = true;
-			for(int s = 0; s < Skills.size(); s++)
-			{
-				int Skill = GetSkillStatByName(SCRIPTVAR(Skills[s]));
-				if (Skill == -1)
-				{
-					SkillSuccess = false;
-					break;
-				}
-				NewTitle.SkillsReq.add(Skill);
-			}
 
-			if (SkillSuccess)
-				CTitleManager::AddTitle(NewTitle);
-		}
+	if (Params.size() < 1) 
+	{
+		ERROR_MISSING_PARMS;
+		return false;
 	}
-	else ERROR_MISSING_PARMS;
+
+	if (Params.size() == 1)
+	{	//Default title
+		CTitleManager::DefaultTitle.Name = Params[0];
+		CTitleManager::DefaultTitle.MinLevel = 0;
+	}
+	else
+	{	//Specific title
+		title_t NewTitle;
+		NewTitle.Name = Params[0];
+		NewTitle.MinLevel = atoi(GetScriptVar("TITLE_MINSKILL"));
+		static msstringlist Skills;
+		Skills.clearitems();
+		TokenizeString(Params[1], Skills);
+		bool SkillSuccess = true;
+		int SKILL_FAILURE = -1;
+		for(int s = 0; s < Skills.size(); s++)
+		{
+			int Skill = GetSkillStatByName(SCRIPTVAR(Skills[s]));
+			if (Skill == SKILL_FAILURE)
+			{
+				SkillSuccess = false;
+				break;
+			}
+			NewTitle.SkillsReq.add(Skill);
+		}
+
+		if (SkillSuccess)
+			CTitleManager::AddTitle(NewTitle);
+	}
 
 	return true;
 }

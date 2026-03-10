@@ -378,8 +378,8 @@ private:
 public:
 	VGUI_DoubleClickDetector()
 	{
-		mLastClick = 0;
-		mpLastClicked = NULL;
+		mLastClick = 0.0;
+		mpLastClicked = nullptr;
 		mLastMouseCode = MOUSE_LAST;
 	}
 
@@ -392,7 +392,9 @@ public:
 			float vThreshhold = gEngfuncs.pfnGetCvarFloat("ms_doubleclicktime") + mLastClick;
 			if (vCurTime < vThreshhold)
 			{
-				mLastClick = vCurTime;
+				mLastClick = 0.0;
+				mpLastClicked = nullptr;
+				mLastMouseCode = MOUSE_LAST;
 				return true;
 			}
 		}
@@ -456,8 +458,8 @@ public:
 class VGUI_Container : public CTransparentPanel
 {
 public:
-	mslist<VGUI_ItemButton *> m_ItemButtons;
-	mslist<VGUI_ItemButton *> m_AlphabetizedItemButtons; // MiB FEB2019_24 [ALPHABETICAL_INVENTORY]
+	std::vector<VGUI_ItemButton *> m_ItemButtons;
+	std::vector<VGUI_ItemButton *> m_AlphabetizedItemButtons; // MiB FEB2019_24 [ALPHABETICAL_INVENTORY]
 	int m_ItemButtonTotal;
 	int m_InitializedItemButtons;
 	CTFScrollPanel *m_pScrollPanel;
@@ -467,12 +469,12 @@ public:
 	class VGUI_InvTypePanel	*m_pInvTypePanel;
 
 	void Update();
-	void UpdatePosition(int idx);
+	void UpdatePosition(int idx, int invType);
 
 	virtual CTFScrollPanel *GetScrollForStepInput() { return m_pScrollPanel; }
 
 	// MiB FEB2019_24 [ALPHABETICAL_INVENTORY]
-	bool IsAlphabetical() { return gEngfuncs.pfnGetCvarFloat("ms_alpha_inventory") == 1; }
+	bool IsAlphabetical() { return gEngfuncs.pfnGetCvarFloat("ms_alpha_inventory") >= 1.0f; }
 	
 	#define INVTYPE_ORIGINAL 0
 	#define INVTYPE_SMALL 1

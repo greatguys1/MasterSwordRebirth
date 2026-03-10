@@ -2766,17 +2766,15 @@ void CBasePlayer::Spawn(void)
 
 		// Call AngelScript event handler directly via ASManager
 		// Pass the player entity string as parameter
-		#ifdef VALVE_DLL
+#ifdef VALVE_DLL
 		CAngelScriptManager* pASManager = CAngelScriptManager::Instance();
 		if (pASManager && pASManager->IsInitialized())
 		{
-
-
 			std::vector<std::string> params;
 			params.push_back(EntToStdString(this)); // Entity string format: "PentP(index,address)"
 			pASManager->CallGlobalFunctionWithParams("GamePlayerPutInWorld", params);
 		}
-		#endif
+#endif
 
 		//See if music is playing for all players, then play for newly connected character
 		if (MSGlobals::AllMusic.length() > 0) //If playing music for all players
@@ -6456,6 +6454,10 @@ bool CBasePlayer::RestoreAllServer(void *pData, ulong Size)
 	for (int i = 0; i < Data.m_Items.size(); i++)
 	{
 		CGenericItem *pItem = Data.m_Items[i].operator CGenericItem *();
+		
+		// we ignore broken items.
+		if (pItem == nullptr)
+			continue;
 
 		if (pItem->m_Location == ITEMPOS_HANDS)
 			AddItem(pItem, true, false, pItem->m_Hand);
