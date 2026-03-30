@@ -462,6 +462,9 @@ void ClientCommand2(edict_t *pEntity)
 	CBasePlayer *pPlayer = GetClassPtr((CBasePlayer *)pev);
 	int iHand = -1;
 
+	if (!pPlayer)
+		return;
+
 	if (MSGlobals::GameScript)
 	{
 		CBaseEntity *pWorld = CBaseEntity::Instance(ENT(0));
@@ -531,7 +534,7 @@ void ClientCommand2(edict_t *pEntity)
 				pEventManager->FirePlayerSayTextEvent(pszPlayerName, pszSteamID, Text.c_str());
 			}
 
-			pPlayer->Speak(Text, (speech_type)SayType);
+			pPlayer->Speak(Text, static_cast<speech_type>(SayType));
 		}
 	}
 	else if (FStrEq(pcmd, "setsay"))
@@ -2389,7 +2392,7 @@ int AddToFullPack(struct entity_state_s *state, int e, edict_t *ent, edict_t *ho
 	
 		// Ignore if not the host and not touching a PVS/PAS leaf
 		// If pSet is NULL, then the test will always succeed and the entity will be added to the update
-		if (ent != host || !FBitSet(ent->v.playerclass, ENT_EFFECT_FOLLOW_ROTATE))
+		if (ent != host && !FBitSet(ent->v.playerclass, ENT_EFFECT_FOLLOW_ROTATE))
 		{
 			if (!ENGINE_CHECK_VISIBILITY((const struct edict_s *)ent, pSet))
 			{
